@@ -165,7 +165,21 @@ class InferenceEngine:
             raw_response = self._call_llm(messages)
 
             # ---- Step D: parse ----
-            return self._parse_response(raw_response, user_input)
+            result = self._parse_response(raw_response, user_input)
+            # If parsing failed and needs_clarification, use LLM's raw text as chat reply
+            if result.needs_clarification and raw_response.strip():
+                return TaskResult(
+                    task_type="general_chat",
+                    system_name="",
+                    mode="",
+                    params={},
+                    confidence=0.5,
+                    needs_clarification=False,
+                    raw_response=raw_response,
+                    clarification_question=raw_response.strip(),
+                    user_input=user_input,
+                )
+            return result
 
         except Exception:
             self._logger.exception(
@@ -237,21 +251,12 @@ class InferenceEngine:
         for attempt in range(2):  # initial + 1 retry
             try:
                 self._logger.debug("LLM call attempt %d", attempt + 1)
-                try:
-                    response = self._client.chat.completions.create(
-                        model=self._config.ollama_model,
-                        messages=messages,
-                        response_format={"type": "json_object"},
-                        temperature=0.1,
-                        timeout=30,
-                    )
-                except Exception:
-                    response = self._client.chat.completions.create(
-                        model=self._config.ollama_model,
-                        messages=messages,
-                        temperature=0.1,
-                        timeout=30,
-                    )
+                response = self._client.chat.completions.create(
+                    model=self._config.ollama_model,
+                    messages=messages,
+                    temperature=0.1,
+                    timeout=30,
+                )
                 content = response.choices[0].message.content or ""
                 self._logger.debug("LLM response length: %d chars", len(content))
                 return content

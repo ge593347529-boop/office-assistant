@@ -133,14 +133,18 @@ def build_system_prompt(schema: dict, tools: dict, context: dict) -> str:
         "你不需要执行任务，只需要输出参数——代码会负责执行。"
     )
 
-    # ---- 最严格的输出规则 ----
+    # ---- 输出规则 ----
     lines.append(
-        "【最重要规则】你的回复必须是一个纯JSON对象，不要有任何解释、道歉、"
-        "思考过程或额外文字。整个回复就是一段合法的JSON。"
+        "【输出规则】优先判断用户意图："
     )
     lines.append(
-        "【特殊规则】如果 task_type 是 general_chat（普通对话），请将你的对话回复内容"
-        "放在 clarification_question 字段中。"
+        "• 如果用户想执行办公任务（填表单、处理Excel、整理文件等），必须输出JSON。"
+    )
+    lines.append(
+        "• 如果是普通对话、问候、闲聊，直接自然回复即可，不需要JSON。"
+    )
+    lines.append(
+        "输出JSON时，整个回复就是一段合法的JSON，不要有额外文字。"
     )
 
     # ---- 可用任务类型 ----
