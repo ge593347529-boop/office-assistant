@@ -12,6 +12,7 @@ from app.core.conversation import ConversationManager
 from app.ui.chat_panel import ChatPanel
 from app.ui.confirm_card import ConfirmCard
 from app.ui.system_tray import SystemTray
+from app.ui.settings_dialog import SettingsDialog
 
 
 class MainWindow(QMainWindow):
@@ -81,6 +82,7 @@ class MainWindow(QMainWindow):
         # 系统托盘
         self.tray.show_window.connect(self.show_and_activate)
         self.tray.quit_app.connect(self._quit_app)
+        self.tray.settings_requested.connect(self._open_settings)
 
     def _connect_confirm_card(self, card: ConfirmCard) -> None:
         """连接动态创建的 ConfirmCard 信号。"""
@@ -93,14 +95,19 @@ class MainWindow(QMainWindow):
     # ═══════════════════════════════════════════════════════════════
 
     def _check_ollama_status(self) -> None:
-        """检查 Ollama 连接状态并在聊天面板中提示。"""
+        """检查 API 连接状态并在聊天面板中提示。"""
         if self.engine.check_ollama_available():
             self.chat_panel.add_message(
-                "system", "已连接 Ollama，随时可以开始对话。"
+                "system", "已连接 AI 服务，随时可以开始对话。"
             )
         else:
             self.chat_panel.add_message(
-                "system", "⚠️ Ollama 未连接，请确认服务已启动。"
+                "system",
+                "⚠️ 未连接到 AI 服务\n\n"
+                "请确认以下任一方式已完成配置：\n"
+                "1. 点击系统托盘右键 →「设置」\n"
+                "2. 编辑项目目录的 .env 文件\n\n"
+                "配置完成后重启 App 即可使用。"
             )
 
     # ═══════════════════════════════════════════════════════════════
@@ -127,10 +134,20 @@ class MainWindow(QMainWindow):
 
         # 5. 需要澄清 → 追问
         if result.needs_clarification:
-            question = result.clarification_question or "请进一步描述你的需求。"
+            # 检查是否是 API 不可用导致的
+            if not self.engine.check_ollama_available():
+                question = (
+                    "⚠️ 未连接到 AI 服务，无法处理您的请求。\n\n"
+                    "请先配置 API 连接：\n"
+                    "• 右键系统托盘图标 →「设置」\n"
+                    "• 或编辑项目目录的 .env 文件\n\n"
+                    "配置完成后重启 App。"
+                )
+            else:
+                question = result.clarification_question or "请进一步描述你的需求。"
             self.chat_panel.add_message("assistant", question)
             self.conv.add_assistant_message(question)
-            self.tray.set_task_status("等待澄清")
+            self.tray.set_task_status("就绪")
             return
 
         # 6. 正常任务 → 嵌入确认卡片
@@ -199,6 +216,15 @@ class MainWindow(QMainWindow):
         self.chat_panel.add_message("system", "已取消任务。")
         self.tray.set_task_status("就绪")
         self._current_task = None
+
+    # ═══════════════════════════════════════════════════════════════
+    # 设置
+    # ═══════════════════════════════════════════════════════════════
+
+    def _open_settings(self) -> None:
+        """打开 API 设置对话框。"""
+        dlg = SettingsDialog(self)
+        dlg.exec()
 
     # ═══════════════════════════════════════════════════════════════
     # 窗口行为

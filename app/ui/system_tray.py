@@ -37,6 +37,7 @@ class SystemTray(QSystemTrayIcon):
 
     show_window = Signal()
     quit_app = Signal()
+    settings_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -77,8 +78,8 @@ class SystemTray(QSystemTrayIcon):
         self.show()
 
     def _on_settings(self):
-        """设置菜单（占位）。"""
-        self.show_notification("设置", "设置功能即将推出")
+        """设置菜单 — 发射信号由 main_window 打开设置对话框。"""
+        self.settings_requested.emit()
 
     def _on_history(self):
         """任务历史菜单（占位）。"""
