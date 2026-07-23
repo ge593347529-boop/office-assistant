@@ -38,6 +38,7 @@ class SystemTray(QSystemTrayIcon):
     show_window = Signal()
     quit_app = Signal()
     settings_requested = Signal()
+    restart_app = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -63,7 +64,9 @@ class SystemTray(QSystemTrayIcon):
         history_action.triggered.connect(self._on_history)
         self._menu.addAction(history_action)
 
-        self._menu.addSeparator()
+        restart_action = QAction("重启", self._menu)
+        restart_action.triggered.connect(self.restart_app.emit)
+        self._menu.addAction(restart_action)
 
         quit_action = QAction("退出", self._menu)
         quit_action.triggered.connect(self.quit_app.emit)

@@ -110,6 +110,7 @@ class MainWindow(QMainWindow):
         self.tray.show_window.connect(self.show_and_activate)
         self.tray.quit_app.connect(self._quit_app)
         self.tray.settings_requested.connect(self._open_settings)
+        self.tray.restart_app.connect(self._restart_app)
 
     def _connect_confirm_card(self, card: ConfirmCard) -> None:
         """连接动态创建的 ConfirmCard 信号。"""
@@ -276,6 +277,14 @@ class MainWindow(QMainWindow):
         event.ignore()
         self.hide()
         self.tray.show_notification("AI 办公助手", "已最小化到系统托盘")
+
+    def _restart_app(self) -> None:
+        """重启应用。"""
+        import subprocess, sys
+        self.tray.hide()
+        subprocess.Popen([sys.executable, sys.argv[0]])
+        from PySide6.QtWidgets import QApplication
+        QApplication.instance().quit()
 
     def _quit_app(self) -> None:
         """真正退出应用。"""
