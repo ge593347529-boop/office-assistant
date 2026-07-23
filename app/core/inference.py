@@ -86,7 +86,7 @@ class InferenceEngine:
 
         self._client = openai.OpenAI(
             base_url=config.ollama_base_url,
-            api_key="ollama",  # Ollama does not validate the key
+            api_key=config.api_key,
         )
 
     # ------------------------------------------------------------------

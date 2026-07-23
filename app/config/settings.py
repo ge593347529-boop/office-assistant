@@ -19,6 +19,7 @@ _ENV_PREFIX = "OA_"
 _ENV_MAP: dict[str, str] = {
     "OA_OLLAMA_URL": "ollama_base_url",
     "OA_OLLAMA_MODEL": "ollama_model",
+    "OA_API_KEY": "api_key",
     "OA_DATA_DIR": "data_dir",
     "OA_SESSIONS_DIR": "sessions_dir",
     "OA_CHROME_PROFILE_DIR": "chrome_profile_dir",
@@ -40,6 +41,7 @@ class AppConfig:
 
     ollama_base_url: str = "http://localhost:11434/v1"
     ollama_model: str = "qwen2.5"
+    api_key: str = "ollama"               # Ollama 不需要真实 key，DeepSeek 等需要
     data_dir: Path = field(default_factory=lambda: Path("data"))
     sessions_dir: Path = field(default_factory=lambda: Path("data/sessions"))
     chrome_profile_dir: Path = field(default_factory=lambda: Path("data/chrome_profile"))
