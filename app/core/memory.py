@@ -349,6 +349,9 @@ class MemoryStore:
         files_used: list[str],
     ) -> None:
         """Persist a completed task across all three memory layers."""
+        # Skip trivial tasks that should never become shortcuts
+        if task_type in ("general_chat", "unknown") or not system_name:
+            return
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         task_summary = f"{system_name}/{task_type}"
         field_mapping = params.get("field_mapping", params)

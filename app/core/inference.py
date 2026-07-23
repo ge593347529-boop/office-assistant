@@ -141,9 +141,13 @@ class InferenceEngine:
             context = self._memory.get_context(user_input)
 
             # ---- Step B: shortcut (memory hit) fast path ----
+            # Only use shortcut for real tasks (not general_chat/unknown, not empty system)
             shortcut = context.get("shortcut_match")
             if shortcut:
-                return self._build_shortcut_result(shortcut, user_chrome_connected)
+                task_type = shortcut.get("task_type", "")
+                system_name = shortcut.get("system_name", "")
+                if task_type not in ("general_chat", "unknown") and system_name:
+                    return self._build_shortcut_result(shortcut, user_chrome_connected)
 
             # ---- Step C: build prompts and call LLM ----
             # Inject browser state into the memory context for prompt building
