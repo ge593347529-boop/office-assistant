@@ -17,9 +17,9 @@ def _make_tray_icon() -> QIcon:
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.Antialiasing, True)
 
-    # 蓝底圆形
-    painter.setPen(QPen(QColor("#2563EB"), 0))
-    painter.setBrush(QBrush(QColor("#2563EB")))
+    # Codex 绿底圆形
+    painter.setPen(QPen(QColor("#238636"), 0))
+    painter.setBrush(QBrush(QColor("#238636")))
     painter.drawEllipse(4, 4, 56, 56)
 
     # 白色 "AI" 文字

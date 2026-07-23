@@ -37,173 +37,168 @@ logger = logging.getLogger(__name__)
 # ── QSS 样式表 ──────────────────────────────────────────────────────────────
 
 CARD_STYLE = """
-QFrame#QFrame#ConfirmCard{
-    background-color: #ffffff;
-    border: 1px solid #e0e0e0;
+QFrame#ConfirmCard {
+    background-color: #161b22;
+    border: 1px solid #30363d;
     border-radius: 12px;
 }
 
-QFrame#QFrame#ConfirmCard#title_label {
+QFrame#ConfirmCard #title_label {
     font-size: 15px;
     font-weight: 600;
-    color: #1a1a2e;
+    color: #c9d1d9;
 }
 
-QFrame#ConfirmCard#subtitle_label {
+QFrame#ConfirmCard #subtitle_label {
     font-size: 13px;
-    color: #555555;
+    color: #8b949e;
 }
 
-QFrame#ConfirmCard#confidence_label {
+QFrame#ConfirmCard #confidence_label {
     font-size: 12px;
-    color: #e6a817;
+    color: #d29922;
     font-weight: 500;
 }
 
-QFrame#ConfirmCard#field_label {
+QFrame#ConfirmCard #field_label {
     font-size: 13px;
-    color: #666666;
+    color: #8b949e;
     font-weight: 500;
 }
 
-QFrame#ConfirmCard#field_value {
+QFrame#ConfirmCard #field_value {
     font-size: 13px;
-    color: #1a1a2e;
+    color: #c9d1d9;
 }
 
-QFrame#ConfirmCard#field_warning {
-    background-color: #fff8e1;
+QFrame#ConfirmCard #field_warning {
+    background-color: rgba(210, 153, 34, 0.15);
     border-radius: 4px;
     padding: 2px 6px;
+    color: #d29922;
 }
 
-QFrame#ConfirmCard#clarify_title {
+QFrame#ConfirmCard #clarify_title {
     font-size: 15px;
     font-weight: 600;
-    color: #d32f2f;
+    color: #f85149;
 }
 
-QFrame#ConfirmCard#clarify_question {
+QFrame#ConfirmCard #clarify_question {
     font-size: 13px;
-    color: #555555;
+    color: #8b949e;
     font-style: italic;
-    background-color: #fafafa;
+    background-color: #0d1117;
     border-radius: 6px;
     padding: 8px;
 }
 
-QFrame#ConfirmCard#progress_status {
+QFrame#ConfirmCard #progress_status {
     font-size: 13px;
-    color: #555555;
+    color: #8b949e;
 }
 
-QFrame#ConfirmCard#result_icon_label {
+QFrame#ConfirmCard #result_icon_label {
     font-size: 18px;
     font-weight: 700;
 }
 
-QFrame#ConfirmCard#result_message {
+QFrame#ConfirmCard #result_message {
     font-size: 13px;
-    color: #333333;
+    color: #c9d1d9;
 }
 
-QFrame#ConfirmCardQPushButton {
+QFrame#ConfirmCard QPushButton {
     border-radius: 6px;
     padding: 6px 18px;
     font-size: 13px;
     font-weight: 500;
 }
 
-QFrame#ConfirmCardQPushButton#btn_confirm {
-    background-color: #1677ff;
+QFrame#ConfirmCard QPushButton#btn_confirm {
+    background-color: #238636;
     color: #ffffff;
     border: none;
 }
-
-QFrame#ConfirmCardQPushButton#btn_confirm:hover {
-    background-color: #4096ff;
+QFrame#ConfirmCard QPushButton#btn_confirm:hover {
+    background-color: #2ea043;
+}
+QFrame#ConfirmCard QPushButton#btn_confirm:pressed {
+    background-color: #196c2e;
 }
 
-QFrame#ConfirmCardQPushButton#btn_confirm:pressed {
-    background-color: #0958d9;
+QFrame#ConfirmCard QPushButton#btn_modify {
+    background-color: transparent;
+    color: #58a6ff;
+    border: 1px solid #30363d;
+}
+QFrame#ConfirmCard QPushButton#btn_modify:hover {
+    background-color: rgba(88, 166, 255, 0.1);
+    border-color: #58a6ff;
 }
 
-QFrame#ConfirmCardQPushButton#btn_modify {
-    background-color: #ffffff;
-    color: #1677ff;
-    border: 1px solid #1677ff;
+QFrame#ConfirmCard QPushButton#btn_cancel {
+    background-color: transparent;
+    color: #8b949e;
+    border: 1px solid #30363d;
+}
+QFrame#ConfirmCard QPushButton#btn_cancel:hover {
+    background-color: #21262d;
+    color: #c9d1d9;
 }
 
-QFrame#ConfirmCardQPushButton#btn_modify:hover {
-    background-color: #f0f5ff;
-}
-
-QFrame#ConfirmCardQPushButton#btn_cancel {
-    background-color: #ffffff;
-    color: #999999;
-    border: 1px solid #d9d9d9;
-}
-
-QFrame#ConfirmCardQPushButton#btn_cancel:hover {
-    background-color: #f5f5f5;
-    color: #666666;
-}
-
-QFrame#ConfirmCardQPushButton#btn_stop {
-    background-color: #ff4d4f;
+QFrame#ConfirmCard QPushButton#btn_stop {
+    background-color: #da3633;
     color: #ffffff;
     border: none;
 }
-
-QFrame#ConfirmCardQPushButton#btn_stop:hover {
-    background-color: #ff7875;
+QFrame#ConfirmCard QPushButton#btn_stop:hover {
+    background-color: #f85149;
 }
 
-QFrame#ConfirmCardQPushButton#btn_dismiss {
-    background-color: #ffffff;
-    color: #555555;
-    border: 1px solid #d9d9d9;
+QFrame#ConfirmCard QPushButton#btn_dismiss {
+    background-color: transparent;
+    color: #8b949e;
+    border: 1px solid #30363d;
+}
+QFrame#ConfirmCard QPushButton#btn_dismiss:hover {
+    background-color: #21262d;
 }
 
-QFrame#ConfirmCardQPushButton#btn_dismiss:hover {
-    background-color: #f5f5f5;
+QFrame#ConfirmCard QPushButton#btn_screenshot {
+    background-color: transparent;
+    color: #58a6ff;
+    border: 1px solid #30363d;
+}
+QFrame#ConfirmCard QPushButton#btn_screenshot:hover {
+    background-color: rgba(88, 166, 255, 0.1);
 }
 
-QFrame#ConfirmCardQPushButton#btn_screenshot {
-    background-color: #ffffff;
-    color: #1677ff;
-    border: 1px solid #1677ff;
-}
-
-QFrame#ConfirmCardQPushButton#btn_screenshot:hover {
-    background-color: #f0f5ff;
-}
-
-QFrame#ConfirmCardQProgressBar {
+QFrame#ConfirmCard QProgressBar {
     border: none;
     border-radius: 6px;
-    background-color: #f0f0f0;
-    height: 10px;
+    background-color: #21262d;
+    height: 8px;
     text-align: center;
     font-size: 11px;
+    color: #c9d1d9;
 }
-
-QFrame#ConfirmCardQProgressBar::chunk {
-    background-color: #1677ff;
+QFrame#ConfirmCard QProgressBar::chunk {
+    background-color: #238636;
     border-radius: 6px;
 }
 
-QFrame#ConfirmCardQLineEdit {
-    border: 1px solid #d9d9d9;
+QFrame#ConfirmCard QLineEdit {
+    border: 1px solid #30363d;
     border-radius: 6px;
     padding: 6px 10px;
     font-size: 13px;
-    background-color: #fafafa;
+    background-color: #0d1117;
+    color: #c9d1d9;
 }
-
-QFrame#ConfirmCardQLineEdit:focus {
-    border-color: #1677ff;
-    background-color: #ffffff;
+QFrame#ConfirmCard QLineEdit:focus {
+    border-color: #58a6ff;
+    background-color: #0d1117;
 }
 """
 

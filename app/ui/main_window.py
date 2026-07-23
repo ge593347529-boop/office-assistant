@@ -59,8 +59,35 @@ class MainWindow(QMainWindow):
     def _setup_window(self) -> None:
         """配置窗口属性。"""
         self.setWindowTitle("AI 办公助手")
-        self.resize(800, 600)
+        self.resize(900, 650)
         self.setMinimumSize(500, 400)
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #0d1117;
+            }
+            QWidget {
+                background-color: #0d1117;
+                color: #c9d1d9;
+                font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+            }
+            QScrollBar:vertical {
+                background: #0d1117;
+                width: 8px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #30363d;
+                border-radius: 4px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #484f58;
+            }
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+        """)
 
     def _setup_central_widget(self) -> None:
         """ChatPanel 全屏作为中央控件。"""

@@ -82,23 +82,23 @@ class _MessageBubble(QFrame):
         role_styles = {
             "user": {
                 "bubble": {
-                    "background-color": "#E3F2FD",
-                    "border": "1px solid #BBDEFB",
-                    "border-radius": "12px",
+                    "background-color": "#1f6feb",
+                    "border": "1px solid #388bfd",
+                    "border-radius": "12px 12px 4px 12px",
                     "padding": "10px 14px",
                 },
                 "align": Qt.AlignRight,
-                "role_visible": True,
+                "role_visible": False,
             },
             "assistant": {
                 "bubble": {
-                    "background-color": "#F5F5F5",
-                    "border": "1px solid #E0E0E0",
-                    "border-radius": "12px",
+                    "background-color": "#161b22",
+                    "border": "1px solid #21262d",
+                    "border-radius": "12px 12px 12px 4px",
                     "padding": "10px 14px",
                 },
                 "align": Qt.AlignLeft,
-                "role_visible": True,
+                "role_visible": False,
             },
             "system": {
                 "bubble": {
@@ -125,21 +125,28 @@ class _MessageBubble(QFrame):
 
         # 对齐
         self._role_label.setAlignment(style["align"])
-        self._content_label.setAlignment(style["align"])
+        self._content_label.setAlignment(style["align"] | Qt.AlignVCenter)
         self._time_label.setAlignment(style["align"])
 
         # 角色标签可见性
         self._role_label.setVisible(style["role_visible"])
 
-        # 系统消息特殊处理：灰色小字
+        # 角色特定样式
         if self._role == "system":
             self._content_label.setStyleSheet(
-                "color: #9E9E9E; font-size: 12px; font-style: italic;"
+                "color: #484f58; font-size: 12px; background: transparent; border: none;"
             )
-            self._time_label.setStyleSheet("color: #BDBDBD; font-size: 11px;")
+            self._time_label.setStyleSheet("color: #30363d; font-size: 10px; background: transparent;")
+        elif self._role == "user":
+            self._content_label.setStyleSheet(
+                "color: #ffffff; font-size: 14px; background: transparent; border: none;"
+            )
+            self._time_label.setStyleSheet("color: rgba(255,255,255,0.5); font-size: 10px; background: transparent;")
         else:
-            self._content_label.setStyleSheet("color: #212121; font-size: 14px;")
-            self._time_label.setStyleSheet("color: #9E9E9E; font-size: 11px;")
+            self._content_label.setStyleSheet(
+                "color: #c9d1d9; font-size: 14px; background: transparent; border: none;"
+            )
+            self._time_label.setStyleSheet("color: #484f58; font-size: 10px; background: transparent;")
 
     # ── 尺寸策略 ───────────────────────────────────────────────
 
@@ -225,7 +232,7 @@ class _InputBar(QWidget):
         self._send_btn.setEnabled(not is_processing)
         if is_processing:
             self._text_edit.setStyleSheet(
-                "#ChatInput { background-color: #F5F5F5; color: #BDBDBD; }"
+                "#ChatInput { background-color: #161b22; color: #484f58; border-color: #21262d; }"
             )
         else:
             self._text_edit.setStyleSheet("")
@@ -279,12 +286,17 @@ class ChatPanel(QWidget):
         self._scroll_area.setWidget(self._msg_container)
         root.addWidget(self._scroll_area, stretch=1)
 
-        # ── 处理中指示条 ───────────────────────────────────────
-        self._processing_label = QLabel("AI 思考中...")
+        # ── 处理中指示条 (typing indicator) ────────────────────
+        self._processing_label = QLabel("● ● ●")
         self._processing_label.setObjectName("ProcessingLabel")
         self._processing_label.setAlignment(Qt.AlignCenter)
         self._processing_label.setVisible(False)
         root.addWidget(self._processing_label)
+
+        # 脉动动画
+        self._typing_timer = QTimer(self)
+        self._typing_timer.timeout.connect(self._animate_typing)
+        self._typing_dots = 0
 
         # ── 底部输入栏 ─────────────────────────────────────────
         self._input_bar = _InputBar()
@@ -296,75 +308,67 @@ class ChatPanel(QWidget):
     def _apply_global_style(self) -> None:
         self.setStyleSheet("""
             #ChatPanel {
-                background-color: #FFFFFF;
+                background-color: #0d1117;
             }
-
             #ChatScrollArea {
-                background-color: #FFFFFF;
+                background-color: #0d1117;
                 border: none;
             }
-
             #MessageContainer {
-                background-color: #FFFFFF;
+                background-color: #0d1117;
             }
-
             #InputBar {
-                background-color: #FAFAFA;
-                border-top: 1px solid #E0E0E0;
+                background-color: #161b22;
+                border-top: 1px solid #21262d;
             }
-
             #ChatInput {
-                border: 1px solid #E0E0E0;
+                border: 1px solid #30363d;
                 border-radius: 8px;
-                padding: 6px 10px;
-                background-color: #FFFFFF;
-                color: #212121;
-            }
-
-            #ChatInput:focus {
-                border: 1px solid #1976D2;
-            }
-
-            #SendButton {
-                background-color: #1976D2;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 8px;
+                padding: 8px 12px;
+                background-color: #0d1117;
+                color: #c9d1d9;
                 font-size: 14px;
-                font-weight: bold;
             }
-
-            #SendButton:hover {
-                background-color: #1565C0;
+            #ChatInput:focus {
+                border: 1px solid #58a6ff;
             }
-
-            #SendButton:pressed {
-                background-color: #0D47A1;
-            }
-
-            #SendButton:disabled {
-                background-color: #BDBDBD;
-            }
-
-            #ProcessingLabel {
-                background-color: #FFF9C4;
-                color: #F57F17;
+            #SendButton {
+                background-color: #238636;
+                color: #ffffff;
+                border: none;
+                border-radius: 6px;
                 font-size: 13px;
-                padding: 6px 0px;
-                border-top: 1px solid #FFF176;
+                font-weight: 600;
+                padding: 0 14px;
             }
-
+            #SendButton:hover {
+                background-color: #2ea043;
+            }
+            #SendButton:pressed {
+                background-color: #196c2e;
+            }
+            #SendButton:disabled {
+                background-color: #21262d;
+                color: #484f58;
+            }
+            #ProcessingLabel {
+                background-color: #161b22;
+                color: #8b949e;
+                font-size: 13px;
+                padding: 10px 0px;
+                border-top: 1px solid #21262d;
+            }
             #BubbleRole {
-                font-size: 12px;
-                font-weight: bold;
-                color: #757575;
+                font-size: 11px;
+                font-weight: 600;
+                color: #8b949e;
                 background: transparent;
                 border: none;
+                text-transform: uppercase;
             }
-
             #BubbleTime {
-                font-size: 11px;
-                color: #BDBDBD;
+                font-size: 10px;
+                color: #484f58;
                 background: transparent;
                 border: none;
                 margin-top: 2px;
@@ -417,9 +421,24 @@ class ChatPanel(QWidget):
         self._processing_label.setVisible(is_processing)
 
         if is_processing:
+            self._typing_dots = 0
+            self._typing_timer.start(400)
             self._input_bar.set_placeholder("AI 思考中...")
         else:
+            self._typing_timer.stop()
+            self._processing_label.setText("")
             self._input_bar.set_placeholder("输入你想做的事情...")
+
+    def _animate_typing(self) -> None:
+        """打字动画：循环 ● ○ ○  /  ○ ● ○  /  ○ ○ ●"""
+        dots = ["○", "●"]
+        patterns = [
+            f"{dots[1]} {dots[0]} {dots[0]}",
+            f"{dots[0]} {dots[1]} {dots[0]}",
+            f"{dots[0]} {dots[0]} {dots[1]}",
+        ]
+        self._processing_label.setText(patterns[self._typing_dots % 3])
+        self._typing_dots += 1
 
     def clear(self) -> None:
         """清空聊天区域"""

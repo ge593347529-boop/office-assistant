@@ -28,6 +28,8 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("API 设置")
         self.setMinimumWidth(480)
         self.setModal(True)
+        self.setStyleSheet("QDialog{background-color:#161b22;}")
+        self.setMinimumSize(480, 350)
 
         self._project_root = Path(__file__).resolve().parent.parent.parent
         self._env_path = self._project_root / ".env"
@@ -42,28 +44,37 @@ class SettingsDialog(QDialog):
 
         # 标题
         title = QLabel("AI 模型配置")
-        title.setStyleSheet("font-size: 16px; font-weight: 600; color: #1a1a2e;")
+        title.setStyleSheet("font-size: 16px; font-weight: 600; color: #c9d1d9;")
         layout.addWidget(title)
 
         desc = QLabel("配置 API 地址和密钥后重启生效")
-        desc.setStyleSheet("font-size: 12px; color: #888;")
+        desc.setStyleSheet("font-size: 12px; color: #8b949e;")
         layout.addWidget(desc)
 
         # 表单
         form = QFormLayout()
         form.setSpacing(12)
 
+        input_style = (
+            "QLineEdit{background:#0d1117;color:#c9d1d9;border:1px solid #30363d;"
+            "border-radius:6px;padding:6px 10px;font-size:13px;}"
+            "QLineEdit:focus{border-color:#58a6ff;}"
+        )
+
         self._url_input = QLineEdit()
         self._url_input.setPlaceholderText("https://api.deepseek.com/v1")
+        self._url_input.setStyleSheet(input_style)
         form.addRow("API 地址:", self._url_input)
 
         self._model_input = QLineEdit()
         self._model_input.setPlaceholderText("deepseek-chat")
+        self._model_input.setStyleSheet(input_style)
         form.addRow("模型名称:", self._model_input)
 
         self._key_input = QLineEdit()
         self._key_input.setEchoMode(QLineEdit.Password)
         self._key_input.setPlaceholderText("sk-...")
+        self._key_input.setStyleSheet(input_style)
         form.addRow("API Key:", self._key_input)
 
         layout.addLayout(form)
@@ -73,7 +84,7 @@ class SettingsDialog(QDialog):
             "支持所有 OpenAI 兼容 API：DeepSeek、Ollama、vLLM 等\n"
             "配置保存在项目目录的 .env 文件中"
         )
-        hint.setStyleSheet("font-size: 11px; color: #aaa;")
+        hint.setStyleSheet("font-size: 11px; color: #484f58;")
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
@@ -83,27 +94,27 @@ class SettingsDialog(QDialog):
 
         test_btn = QPushButton("测试连接")
         test_btn.setStyleSheet(
-            "QPushButton{background:#fff;color:#1677ff;border:1px solid #1677ff;"
+            "QPushButton{background:transparent;color:#58a6ff;border:1px solid #30363d;"
             "border-radius:6px;padding:6px 14px;font-size:13px;}"
-            "QPushButton:hover{background:#f0f5ff;}"
+            "QPushButton:hover{background:rgba(88,166,255,0.1);border-color:#58a6ff;}"
         )
         test_btn.clicked.connect(self._on_test)
         btn_layout.addWidget(test_btn)
 
         cancel_btn = QPushButton("取消")
         cancel_btn.setStyleSheet(
-            "QPushButton{background:#fff;color:#666;border:1px solid #d9d9d9;"
+            "QPushButton{background:transparent;color:#8b949e;border:1px solid #30363d;"
             "border-radius:6px;padding:6px 14px;font-size:13px;}"
-            "QPushButton:hover{background:#f5f5f5;}"
+            "QPushButton:hover{background:#21262d;color:#c9d1d9;}"
         )
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
         save_btn = QPushButton("保存")
         save_btn.setStyleSheet(
-            "QPushButton{background:#1677ff;color:#fff;border:none;"
+            "QPushButton{background:#238636;color:#fff;border:none;"
             "border-radius:6px;padding:6px 18px;font-size:13px;font-weight:500;}"
-            "QPushButton:hover{background:#4096ff;}"
+            "QPushButton:hover{background:#2ea043;}"
         )
         save_btn.clicked.connect(self._on_save)
         btn_layout.addWidget(save_btn)
