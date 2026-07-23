@@ -119,7 +119,7 @@ class _MessageBubble(QFrame):
         qss_parts = []
         for prop, value in bubble.items():
             qss_parts.append(f"  {prop}: {value};")
-        bubble_qss = "MessageBubble {\n" + "\n".join(qss_parts) + "\n}"
+        bubble_qss = "QFrame#MessageBubble {\n" + "\n".join(qss_parts) + "\n}"
 
         self.setStyleSheet(bubble_qss)
 

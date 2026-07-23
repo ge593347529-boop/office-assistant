@@ -37,53 +37,53 @@ logger = logging.getLogger(__name__)
 # ── QSS 样式表 ──────────────────────────────────────────────────────────────
 
 CARD_STYLE = """
-ConfirmCard {
+QFrame#QFrame#ConfirmCard{
     background-color: #ffffff;
     border: 1px solid #e0e0e0;
     border-radius: 12px;
 }
 
-ConfirmCard #title_label {
+QFrame#QFrame#ConfirmCard#title_label {
     font-size: 15px;
     font-weight: 600;
     color: #1a1a2e;
 }
 
-ConfirmCard #subtitle_label {
+QFrame#ConfirmCard#subtitle_label {
     font-size: 13px;
     color: #555555;
 }
 
-ConfirmCard #confidence_label {
+QFrame#ConfirmCard#confidence_label {
     font-size: 12px;
     color: #e6a817;
     font-weight: 500;
 }
 
-ConfirmCard #field_label {
+QFrame#ConfirmCard#field_label {
     font-size: 13px;
     color: #666666;
     font-weight: 500;
 }
 
-ConfirmCard #field_value {
+QFrame#ConfirmCard#field_value {
     font-size: 13px;
     color: #1a1a2e;
 }
 
-ConfirmCard #field_warning {
+QFrame#ConfirmCard#field_warning {
     background-color: #fff8e1;
     border-radius: 4px;
     padding: 2px 6px;
 }
 
-ConfirmCard #clarify_title {
+QFrame#ConfirmCard#clarify_title {
     font-size: 15px;
     font-weight: 600;
     color: #d32f2f;
 }
 
-ConfirmCard #clarify_question {
+QFrame#ConfirmCard#clarify_question {
     font-size: 13px;
     color: #555555;
     font-style: italic;
@@ -92,94 +92,94 @@ ConfirmCard #clarify_question {
     padding: 8px;
 }
 
-ConfirmCard #progress_status {
+QFrame#ConfirmCard#progress_status {
     font-size: 13px;
     color: #555555;
 }
 
-ConfirmCard #result_icon_label {
+QFrame#ConfirmCard#result_icon_label {
     font-size: 18px;
     font-weight: 700;
 }
 
-ConfirmCard #result_message {
+QFrame#ConfirmCard#result_message {
     font-size: 13px;
     color: #333333;
 }
 
-ConfirmCard QPushButton {
+QFrame#ConfirmCardQPushButton {
     border-radius: 6px;
     padding: 6px 18px;
     font-size: 13px;
     font-weight: 500;
 }
 
-ConfirmCard QPushButton#btn_confirm {
+QFrame#ConfirmCardQPushButton#btn_confirm {
     background-color: #1677ff;
     color: #ffffff;
     border: none;
 }
 
-ConfirmCard QPushButton#btn_confirm:hover {
+QFrame#ConfirmCardQPushButton#btn_confirm:hover {
     background-color: #4096ff;
 }
 
-ConfirmCard QPushButton#btn_confirm:pressed {
+QFrame#ConfirmCardQPushButton#btn_confirm:pressed {
     background-color: #0958d9;
 }
 
-ConfirmCard QPushButton#btn_modify {
+QFrame#ConfirmCardQPushButton#btn_modify {
     background-color: #ffffff;
     color: #1677ff;
     border: 1px solid #1677ff;
 }
 
-ConfirmCard QPushButton#btn_modify:hover {
+QFrame#ConfirmCardQPushButton#btn_modify:hover {
     background-color: #f0f5ff;
 }
 
-ConfirmCard QPushButton#btn_cancel {
+QFrame#ConfirmCardQPushButton#btn_cancel {
     background-color: #ffffff;
     color: #999999;
     border: 1px solid #d9d9d9;
 }
 
-ConfirmCard QPushButton#btn_cancel:hover {
+QFrame#ConfirmCardQPushButton#btn_cancel:hover {
     background-color: #f5f5f5;
     color: #666666;
 }
 
-ConfirmCard QPushButton#btn_stop {
+QFrame#ConfirmCardQPushButton#btn_stop {
     background-color: #ff4d4f;
     color: #ffffff;
     border: none;
 }
 
-ConfirmCard QPushButton#btn_stop:hover {
+QFrame#ConfirmCardQPushButton#btn_stop:hover {
     background-color: #ff7875;
 }
 
-ConfirmCard QPushButton#btn_dismiss {
+QFrame#ConfirmCardQPushButton#btn_dismiss {
     background-color: #ffffff;
     color: #555555;
     border: 1px solid #d9d9d9;
 }
 
-ConfirmCard QPushButton#btn_dismiss:hover {
+QFrame#ConfirmCardQPushButton#btn_dismiss:hover {
     background-color: #f5f5f5;
 }
 
-ConfirmCard QPushButton#btn_screenshot {
+QFrame#ConfirmCardQPushButton#btn_screenshot {
     background-color: #ffffff;
     color: #1677ff;
     border: 1px solid #1677ff;
 }
 
-ConfirmCard QPushButton#btn_screenshot:hover {
+QFrame#ConfirmCardQPushButton#btn_screenshot:hover {
     background-color: #f0f5ff;
 }
 
-ConfirmCard QProgressBar {
+QFrame#ConfirmCardQProgressBar {
     border: none;
     border-radius: 6px;
     background-color: #f0f0f0;
@@ -188,12 +188,12 @@ ConfirmCard QProgressBar {
     font-size: 11px;
 }
 
-ConfirmCard QProgressBar::chunk {
+QFrame#ConfirmCardQProgressBar::chunk {
     background-color: #1677ff;
     border-radius: 6px;
 }
 
-ConfirmCard QLineEdit {
+QFrame#ConfirmCardQLineEdit {
     border: 1px solid #d9d9d9;
     border-radius: 6px;
     padding: 6px 10px;
@@ -201,7 +201,7 @@ ConfirmCard QLineEdit {
     background-color: #fafafa;
 }
 
-ConfirmCard QLineEdit:focus {
+QFrame#ConfirmCardQLineEdit:focus {
     border-color: #1677ff;
     background-color: #ffffff;
 }
@@ -210,13 +210,15 @@ ConfirmCard QLineEdit:focus {
 # ── 帮助函数 ────────────────────────────────────────────────────────────────
 
 _TASK_TYPE_ICONS: dict[str, str] = {
-    "form_fill": "\U0001F4DD",  # 📝
-    "data_entry": "\U0001F4CA",  # 📊
-    "report": "\U0001F4CB",  # 📋
-    "search": "\U0001F50D",  # 🔍
-    "extract": "\U0001F4CE",  # 📎
-    "download": "\U0001F4E5",  # 📥
-    "default": "\U0001F4CB",  # 📋
+    "form_filling": "📝",
+    "data_extraction": "📊",
+    "file_organize": "📁",
+    "batch_rename": "🏷️",
+    "excel_report": "📈",
+    "web_monitor": "🔍",
+    "general_chat": "💬",
+    "unknown": "❓",
+    "default": "📋",
 }
 
 
@@ -226,17 +228,19 @@ def _icon_for_task_type(task_type: str) -> str:
 
 def _friendly_task_type(task_type: str) -> str:
     mapping = {
-        "form_fill": "表单填写",
-        "data_entry": "数据录入",
-        "report": "报表生成",
-        "search": "数据查询",
-        "extract": "数据提取",
-        "download": "文件下载",
+        "form_filling": "表单填写",
+        "data_extraction": "数据提取",
+        "file_organize": "文件整理",
+        "batch_rename": "批量重命名",
+        "excel_report": "Excel报表",
+        "web_monitor": "网页监控",
+        "general_chat": "普通对话",
+        "unknown": "未知任务",
     }
     return mapping.get(task_type, task_type)
 
 
-# ── ConfirmCard ─────────────────────────────────────────────────────────────
+# ── QFrame#ConfirmCard─────────────────────────────────────────────────────────────
 
 class ConfirmCard(QFrame):
     """展示 TaskResult 的确认卡片，用户可确认、修改、取消"""
@@ -273,7 +277,7 @@ class ConfirmCard(QFrame):
         self._placeholder.setVisible(False)
         self._root_layout.addWidget(self._placeholder)
 
-        logger.debug("ConfirmCard 初始化完成")
+        logger.debug("QFrame#ConfirmCard初始化完成")
 
     # ── 公共接口 ──────────────────────────────────────────────────────────
 
@@ -330,6 +334,7 @@ class ConfirmCard(QFrame):
         """展示执行结果（ExecutionResult: success, message, details, screenshot）。"""
         self._clear_layout()
         self._mode = "result"
+        self._exec_result = result  # 保存 ExecutionResult 供截图查看
         self._build_result_layout(result)
         self.setVisible(True)
         self.updateGeometry()
@@ -338,13 +343,14 @@ class ConfirmCard(QFrame):
         """清空卡片，回到隐藏状态"""
         self._clear_layout()
         self._task = None
+        self._exec_result = None
         self._params = {}
         self._progress_bar = None
         self._status_label = None
         self._stop_requested = False
         self._mode = "hidden"
         self.setVisible(False)
-        logger.debug("ConfirmCard 已清空并隐藏")
+        logger.debug("QFrame#ConfirmCard已清空并隐藏")
 
     # ── 布局构建 ──────────────────────────────────────────────────────────
 
@@ -385,7 +391,7 @@ class ConfirmCard(QFrame):
         icon = _icon_for_task_type(task.task_type)
         friendly = _friendly_task_type(task.task_type)
         system = task.system_name or ""
-        source = self._params.get("source_file", self._params.get("file", ""))
+        source = self._params.get("data_source", self._params.get("source_file", self._params.get("file", "")))
 
         title_text = f"{icon} {friendly}"
         if system:
@@ -459,7 +465,7 @@ class ConfirmCard(QFrame):
             self._add_grid_field(grid, row, "系统", system, False)  # 系统
             row += 1
 
-        source = self._params.get("source_file", self._params.get("file", ""))
+        source = self._params.get("data_source", self._params.get("source_file", self._params.get("file", "")))
         if source:
             self._add_grid_field(grid, row, "数据源", source, False)  # 数据源
             row += 1
@@ -682,17 +688,16 @@ class ConfirmCard(QFrame):
 
     def _on_screenshot_clicked(self) -> None:
         """结果模式的 '查看截图' 按钮"""
-        if self._task is None:
+        if self._exec_result is None:
             return
-        # 简单实现：使用 QLabel 弹窗展示截图
         try:
-            screenshot = getattr(self._task, "screenshot", None)
+            screenshot = getattr(self._exec_result, "screenshot", None)
             if screenshot is None:
                 return
             from PySide6.QtWidgets import QDialog
 
             dlg = QDialog(self)
-            dlg.setWindowTitle("截图预览")  # 截图预览
+            dlg.setWindowTitle("截图预览")
             dlg.setMinimumSize(400, 300)
             layout = QVBoxLayout(dlg)
 
@@ -701,6 +706,9 @@ class ConfirmCard(QFrame):
             img_label = QLabel()
             if isinstance(screenshot, QPixmap):
                 pixmap = screenshot
+            elif isinstance(screenshot, bytes):
+                pixmap = QPixmap()
+                pixmap.loadFromData(screenshot)
             elif isinstance(screenshot, str):
                 pixmap = QPixmap(screenshot)
             else:

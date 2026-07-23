@@ -44,6 +44,7 @@ class MainWindow(QMainWindow):
         # ── UI ───────────────────────────────────────────────────
         self.chat_panel = ChatPanel()
         self.tray = SystemTray()
+        self.tray.show()
 
         self._setup_window()
         self._setup_central_widget()
@@ -170,9 +171,21 @@ class MainWindow(QMainWindow):
         card.show_result(exec_result)
 
         # 记录到历史
-        self.memory.record_task(self._current_task, exec_result)
+        task = self._current_task
+        files_used = []
+        if task.params.get("data_source"):
+            files_used.append(task.params["data_source"])
+        if task.params.get("target_file"):
+            files_used.append(task.params["target_file"])
+        self.memory.record_task(
+            user_input=getattr(task, 'user_input', '') or '',
+            task_type=task.task_type,
+            system_name=task.system_name,
+            params=task.params,
+            files_used=files_used,
+        )
         self.conv.add_assistant_message(
-            f"任务完成：{exec_result.summary}"
+            f"任务完成：{exec_result.message}"
         )
 
         # 系统托盘通知

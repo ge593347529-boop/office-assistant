@@ -60,6 +60,7 @@ class TaskResult:
     needs_clarification: bool = False
     clarification_question: str = ""
     raw_response: str = ""
+    user_input: str = ""  # 原始用户输入，用于记忆记录
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +103,7 @@ class InferenceEngine:
             ``True`` if Ollama responded within 5 seconds, ``False`` otherwise.
         """
         try:
-            self._client.models.list(extra_query={"timeout": 5})
+            self._client.models.list(timeout=5)
             return True
         except Exception:
             self._logger.warning(
@@ -175,6 +176,7 @@ class InferenceEngine:
                 needs_clarification=True,
                 clarification_question="抱歉，我暂时无法理解您的请求，请换个说法试试？",
                 raw_response="",
+                user_input=user_input,
             )
 
     # ------------------------------------------------------------------
@@ -213,6 +215,7 @@ class InferenceEngine:
             needs_clarification=False,
             clarification_question="",
             raw_response=json.dumps(shortcut, ensure_ascii=False),
+            user_input="",
         )
 
     def _call_llm(self, messages: list[dict[str, str]]) -> str:
@@ -230,13 +233,21 @@ class InferenceEngine:
         for attempt in range(2):  # initial + 1 retry
             try:
                 self._logger.debug("LLM call attempt %d", attempt + 1)
-                response = self._client.chat.completions.create(
-                    model=self._config.ollama_model,
-                    messages=messages,
-                    response_format={"type": "json_object"},
-                    temperature=0.1,
-                    timeout=30,
-                )
+                try:
+                    response = self._client.chat.completions.create(
+                        model=self._config.ollama_model,
+                        messages=messages,
+                        response_format={"type": "json_object"},
+                        temperature=0.1,
+                        timeout=30,
+                    )
+                except Exception:
+                    response = self._client.chat.completions.create(
+                        model=self._config.ollama_model,
+                        messages=messages,
+                        temperature=0.1,
+                        timeout=30,
+                    )
                 content = response.choices[0].message.content or ""
                 self._logger.debug("LLM response length: %d chars", len(content))
                 return content
@@ -292,6 +303,7 @@ class InferenceEngine:
                 needs_clarification=True,
                 clarification_question="我收到了回复但无法解析，请再描述一下您想做什么？",
                 raw_response=raw_response,
+                user_input=user_input,
             )
 
         # ---- Validate & build result ----
@@ -328,6 +340,7 @@ class InferenceEngine:
             needs_clarification=False,
             clarification_question="",
             raw_response=raw_response,
+            user_input=user_input,
         )
 
     # ------------------------------------------------------------------

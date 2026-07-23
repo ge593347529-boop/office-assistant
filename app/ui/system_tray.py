@@ -55,9 +55,11 @@ class SystemTray(QSystemTrayIcon):
         self._menu.addSeparator()
 
         settings_action = QAction("设置", self._menu)
+        settings_action.triggered.connect(self._on_settings)
         self._menu.addAction(settings_action)
 
         history_action = QAction("任务历史", self._menu)
+        history_action.triggered.connect(self._on_history)
         self._menu.addAction(history_action)
 
         self._menu.addSeparator()
@@ -72,6 +74,15 @@ class SystemTray(QSystemTrayIcon):
         self.activated.connect(self._on_activated)
 
         logger.info("系统托盘初始化完成")
+        self.show()
+
+    def _on_settings(self):
+        """设置菜单（占位）。"""
+        self.show_notification("设置", "设置功能即将推出")
+
+    def _on_history(self):
+        """任务历史菜单（占位）。"""
+        self.show_notification("任务历史", "任务历史功能即将推出")
 
     def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.DoubleClick:
