@@ -177,7 +177,15 @@ class MainWindow(QMainWindow):
             self.tray.set_task_status("就绪")
             return
 
-        # 6. 正常任务 → 嵌入确认卡片
+        # 6. general_chat → 直接显示 AI 回复，无需确认卡片
+        if result.task_type == "general_chat":
+            reply = result.clarification_question or result.raw_response or "收到您的消息。"
+            self.chat_panel.add_message("assistant", reply)
+            self.conv.add_assistant_message(reply)
+            self.tray.set_task_status("就绪")
+            return
+
+        # 7. 正常任务 → 嵌入确认卡片
         self._show_confirm_card(result)
 
     def _show_confirm_card(self, task: TaskResult) -> None:

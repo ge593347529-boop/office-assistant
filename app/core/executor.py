@@ -116,9 +116,10 @@ class TaskExecutor:
         """
         # ---- General chat: short-circuit ----
         if task.task_type == "general_chat":
+            reply = task.clarification_question or task.raw_response or "收到您的消息。"
             return ExecutionResult(
                 success=True,
-                message=task.clarification_question or "收到您的消息。",
+                message=reply,
             )
 
         # ---- Unknown: return clarification ----

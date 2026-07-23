@@ -138,6 +138,10 @@ def build_system_prompt(schema: dict, tools: dict, context: dict) -> str:
         "【最重要规则】你的回复必须是一个纯JSON对象，不要有任何解释、道歉、"
         "思考过程或额外文字。整个回复就是一段合法的JSON。"
     )
+    lines.append(
+        "【特殊规则】如果 task_type 是 general_chat（普通对话），请将你的对话回复内容"
+        "放在 clarification_question 字段中。"
+    )
 
     # ---- 可用任务类型 ----
     tool_items = list(tools.items())
