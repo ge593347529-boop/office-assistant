@@ -131,6 +131,9 @@ def load_config(env_prefix: str | None = None) -> AppConfig:
     int_fields = {"chrome_debug_port", "max_history"}
 
     for attr, raw in overrides.items():
+        # Skip empty values — keep defaults
+        if isinstance(raw, str) and not raw.strip():
+            continue
         if attr in int_fields:
             setattr(config, attr, int(raw))
         elif attr.endswith("_dir"):
