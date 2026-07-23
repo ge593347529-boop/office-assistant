@@ -23,6 +23,8 @@ Thumbs.db
 # Project specific
 data/chrome_profile/
 data/sessions/*.json
+data/*.db
+data/*.db-*
 *.spec
 
 # Secrets / local config
