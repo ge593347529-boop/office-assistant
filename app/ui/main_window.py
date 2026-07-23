@@ -93,13 +93,13 @@ class MainWindow(QMainWindow):
 
     def _check_ollama_status(self) -> None:
         """检查 Ollama 连接状态并在聊天面板中提示。"""
-        try:
+        if self.engine.check_ollama_available():
             self.chat_panel.add_message(
                 "system", "已连接 Ollama，随时可以开始对话。"
             )
-        except Exception:
+        else:
             self.chat_panel.add_message(
-                "system", "Ollama 未连接，请确认服务已启动。"
+                "system", "⚠️ Ollama 未连接，请确认服务已启动。"
             )
 
     # ═══════════════════════════════════════════════════════════════
