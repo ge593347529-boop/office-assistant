@@ -148,10 +148,10 @@ class _MessageBubble(QFrame):
             )
             self._time_label.setStyleSheet("color: #484f58; font-size: 10px; background: transparent;")
 
-    # ── 尺寸策略 ───────────────────────────────────────────────
+    # ── 尺寸策略：气泡占聊天区宽度的 75%，最大 700px ──────────────
 
-    def sizeHint(self):
-        return self.minimumSizeHint()
+    def set_max_width(self, max_w: int) -> None:
+        self.setMaximumWidth(max_w)
 
 
 # ── 输入区域组件 ──────────────────────────────────────────────
@@ -389,12 +389,19 @@ class ChatPanel(QWidget):
             wrapper_layout = QHBoxLayout(wrapper)
             wrapper_layout.setContentsMargins(0, 0, 0, 0)
 
+            # 气泡最大宽度 = 可用宽度的 75%，最少 200px
+            chat_width = self.width()
+            bubble_max = max(int(chat_width * 0.75), 200)
+            bubble.setMaximumWidth(bubble_max)
+            bubble.setMinimumWidth(80)
+            bubble.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
             if role == "user":
-                wrapper_layout.setContentsMargins(40, 0, 0, 0)  # 左侧留白
-                wrapper_layout.addWidget(bubble, alignment=Qt.AlignRight)
+                wrapper_layout.addStretch()
+                wrapper_layout.addWidget(bubble)
             else:
-                wrapper_layout.setContentsMargins(0, 0, 40, 0)  # 右侧留白
-                wrapper_layout.addWidget(bubble, alignment=Qt.AlignLeft)
+                wrapper_layout.addWidget(bubble)
+                wrapper_layout.addStretch()
 
             # 插入 wrapper 到弹性空间之前
             self._msg_layout.insertWidget(self._msg_layout.count() - 1, wrapper)
