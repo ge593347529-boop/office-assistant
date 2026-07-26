@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _PANEL_WIDTH_RATIO = 0.25        # 25 % of screen width
-_PANEL_HEIGHT_RATIO = 0.90       # 90 % of screen height
+_PANEL_ASPECT = 2.0 / 1.5        # width:height = 2:1.5, so height = width / aspect
 _LEFT_MARGIN_RATIO = 0.01        # 1 % margin from left edge
 _SLIDE_DURATION_MS = 300         # slide animation duration
 _TYPING_INTERVAL_MS = 400        # typing dot cycle interval
@@ -314,7 +314,7 @@ class SidePanel(QMainWindow):
             screen_geom = screen.availableGeometry()
 
         w = int(screen_geom.width() * _PANEL_WIDTH_RATIO)
-        h = int(screen_geom.height() * _PANEL_HEIGHT_RATIO)
+        h = int(w / _PANEL_ASPECT)
         x = int(screen_geom.width() * _LEFT_MARGIN_RATIO)
         y = int((screen_geom.height() - h) / 2)
 
@@ -473,15 +473,14 @@ class SidePanel(QMainWindow):
             #PanelRoot {{
                 background-color: {_CLR_BG_GLASS};
                 border: 1px solid {_CLR_BORDER};
-                border-left: none;
-                border-radius: 0 16px 16px 0;
+                border-radius: 12px;
             }}
 
             #TitleBar {{
                 background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
-                    stop:0 rgba(255,255,255,0.03), stop:1 rgba(255,255,255,0.06));
+                    stop:0 rgba(255,255,255,0.3), stop:1 rgba(255,255,255,0.6));
                 border-bottom: 1px solid {_CLR_BORDER_LIGHT};
-                border-radius: 0 16px 0 0;
+                border-radius: 12px 12px 0 0;
             }}
 
             #TitleLabel {{
