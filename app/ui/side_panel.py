@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _PANEL_WIDTH_RATIO = 0.40        # 40 % of screen width
-_PANEL_ASPECT = 2.0 / 1.5        # width:height = 2:1.5, so height = width / aspect
+_PANEL_ASPECT = 3.0 / 2.0        # width:height = 3:2
 _LEFT_MARGIN_RATIO = 0.01        # 1 % margin from left edge
 _SLIDE_DURATION_MS = 300         # slide animation duration
 _TYPING_INTERVAL_MS = 400        # typing dot cycle interval
@@ -137,7 +137,7 @@ class _MessageBubble(QFrame):
             ))
             align = Qt.AlignRight
             self._label.setStyleSheet(
-                "color: #1a1a2e; font-size: 13px; background: transparent; border: none;"
+                "color: #1a1a2e; font-size: 13px; font-family: "Microsoft YaHei"; background: transparent; border: none;"
             )
             self._time_label.setStyleSheet(
                 "color: rgba(0,0,0,0.3); font-size: 9px; background: transparent;"
@@ -150,18 +150,14 @@ class _MessageBubble(QFrame):
             ))
             align = Qt.AlignLeft
             self._label.setStyleSheet(
-                "color: #1a1a2e; font-size: 13px; background: transparent; border: none;"
+                "color: #1a1a2e; font-size: 13px; font-family: "Microsoft YaHei"; background: transparent; border: none;"
             )
             self._time_label.setStyleSheet(
                 "color: rgba(0,0,0,0.3); font-size: 9px; background: transparent;"
             )
         else:  # system
-            self.setStyleSheet(self._bubble_qss(
-                bg="transparent",
-                border="none",
-                radius="0px",
-                padding="8px 16px",
-            ))
+            self.setFrameStyle(QFrame.NoFrame)
+            self.setStyleSheet("background: transparent; border: none; padding: 8px 16px;")
             self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             align = Qt.AlignCenter
             self._label.setStyleSheet(
@@ -287,6 +283,8 @@ class SidePanel(QMainWindow):
         memory: MemoryStore,
     ) -> None:
         super().__init__()
+        # Global font
+        QApplication.instance().setFont(QFont("Microsoft YaHei", 10))
         self.config = config
         self.memory = memory
         self.conv = ConversationManager(max_history=config.max_history)
@@ -455,8 +453,8 @@ class SidePanel(QMainWindow):
         self._text_edit.setTabChangesFocus(True)
         self._text_edit.installEventFilter(self)
 
-        font = QFont()
-        font.setPointSize(13)
+        font = QFont("Microsoft YaHei", 11)
+        font.setPixelSize(18)  # ~14px
         self._text_edit.setFont(font)
         self._text_edit.document().setDefaultFont(font)
 
@@ -504,7 +502,7 @@ class SidePanel(QMainWindow):
 
             #TitleLabel {{
                 color: {_CLR_TEXT_PRIMARY};
-                font-size: 13px;
+                font-size: 13px; font-family: "Microsoft YaHei";
                 font-weight: 600;
                 background: transparent;
                 border: none;
@@ -542,7 +540,7 @@ class SidePanel(QMainWindow):
             }}
             #TypingLabel {{
                 color: {_CLR_TEXT_SECONDARY};
-                font-size: 13px;
+                font-size: 13px; font-family: "Microsoft YaHei";
                 background: transparent;
                 border: none;
             }}
@@ -559,6 +557,7 @@ class SidePanel(QMainWindow):
                 background-color: {_CLR_BG};
                 color: {_CLR_TEXT_PRIMARY};
                 font-size: 14px;
+                font-family: "Microsoft YaHei";
                 selection-background-color: {_CLR_ACCENT};
                 caret-color: {_CURSOR_COLOR};
             }}
@@ -572,7 +571,7 @@ class SidePanel(QMainWindow):
                 color: #ffffff;
                 border: none;
                 border-radius: 6px;
-                font-size: 13px;
+                font-size: 13px; font-family: "Microsoft YaHei";
                 font-weight: 600;
                 padding: 0 14px;
             }}
@@ -819,7 +818,7 @@ class SidePanel(QMainWindow):
             text_label = QLabel(content)
             text_label.setWordWrap(True)
             text_label.setTextFormat(Qt.PlainText)
-            text_label.setStyleSheet("color: #1a1a2e; font-size: 13px; background: transparent; border: none;")
+            text_label.setStyleSheet("color: #1a1a2e; font-size: 13px; font-family: "Microsoft YaHei"; background: transparent; border: none;")
             text_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
             text_label.setMaximumWidth(int(self.width() * 0.65))
             row_layout.addWidget(text_label)
