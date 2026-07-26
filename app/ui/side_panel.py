@@ -63,7 +63,7 @@ _INPUT_MIN_HEIGHT = 38
 
 # Codex dark color palette
 _CLR_BG = "#f0f0f0"
-_CLR_BG_GLASS = "rgba(255, 255, 255, 0.88)"
+_CLR_BG_GLASS = "#ffffff"
 _CLR_SURFACE = "#ffffff"
 _CLR_BORDER = "rgba(0, 0, 0, 0.12)"
 _CLR_BORDER_LIGHT = "rgba(0, 0, 0, 0.06)"
@@ -464,10 +464,14 @@ class SidePanel(QMainWindow):
         self._btn_send.setFixedHeight(36)
         self._btn_send.setMinimumWidth(64)
         self._btn_send.setCursor(Qt.PointingHandCursor)
+        self._btn_send.setEnabled(False)  # disabled until text entered
         self._btn_send.clicked.connect(self._on_send_clicked)
         layout.addWidget(self._btn_send)
 
-        # Custom blinking cursor (color via QSS, flash rate via Qt API)
+        # Enable/disable send button based on input content
+        self._text_edit.textChanged.connect(self._on_input_text_changed)
+
+        # Custom blinking cursor
         QApplication.setCursorFlashTime(_CURSOR_BLINK_MS)
 
         return bar
@@ -621,12 +625,18 @@ class SidePanel(QMainWindow):
     # Send logic
     # ------------------------------------------------------------------
 
+    def _on_input_text_changed(self) -> None:
+        """Enable send button only when there is text."""
+        has_text = bool(self._text_edit.toPlainText().strip())
+        self._btn_send.setEnabled(has_text)
+
     def _on_send_clicked(self) -> None:
         """Extract text from the input and submit."""
         text = self._text_edit.toPlainText().strip()
         if not text:
             return
         self._text_edit.clear()
+        self._btn_send.setEnabled(False)
         # Pulse animation on send button
         self._animate_send_pulse()
         self._handle_user_input(text)
@@ -785,82 +795,97 @@ class SidePanel(QMainWindow):
     # ------------------------------------------------------------------
 
     def _add_bubble(self, role: str, content: str) -> None:
-        """Add a message bubble with slide+fade animation."""
-        bubble = _MessageBubble(role, content, parent=self._msg_container)
+        """Add a message: user=bubble+right, AI=avatar+typewriter, system=centered."""
+        if role == "assistant":
+            # AI: avatar + plain text, no bubble frame
+            row = QWidget(self._msg_container)
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(8, 4, 40, 4)
+            row_layout.setSpacing(8)
 
-        if role in ("user", "assistant"):
-            wrapper = QWidget(self._msg_container)
-            wrapper_layout = QHBoxLayout(wrapper)
-            wrapper_layout.setContentsMargins(0, 0, 0, 0)
+            avatar = QLabel("🤖")
+            avatar.setFixedSize(32, 32)
+            avatar.setAlignment(Qt.AlignCenter)
+            avatar.setStyleSheet(
+                "background: #e8e8e8; border-radius: 16px; font-size: 16px;"
+            )
+            avatar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            row_layout.addWidget(avatar, alignment=Qt.AlignTop)
 
-            bubble.setMaximumWidth(int(self.width() * 0.8))
-            bubble.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+            text_label = QLabel(content)
+            text_label.setWordWrap(True)
+            text_label.setTextFormat(Qt.PlainText)
+            text_label.setStyleSheet("color: #1a1a2e; font-size: 13px; background: transparent; border: none;")
+            text_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+            text_label.setMaximumWidth(int(self.width() * 0.65))
+            row_layout.addWidget(text_label)
+            row_layout.addStretch()
 
-            if role == "user":
-                wrapper_layout.addStretch()
-                wrapper_layout.addWidget(bubble)
-            else:
-                wrapper_layout.addWidget(bubble)
-                wrapper_layout.addStretch()
-
-            # Fade-in effect
-            opacity_effect = QGraphicsOpacityEffect(bubble)
+            # Fade-in
+            opacity_effect = QGraphicsOpacityEffect(row)
             opacity_effect.setOpacity(0.0)
-            bubble.setGraphicsEffect(opacity_effect)
-
+            row.setGraphicsEffect(opacity_effect)
             fade = QPropertyAnimation(opacity_effect, b"opacity")
             fade.setDuration(_MSG_SLIDE_MS)
             fade.setStartValue(0.0)
             fade.setEndValue(1.0)
             fade.setEasingCurve(QEasingCurve.OutCubic)
+            fade.start()
+            row._fade_anim = fade
 
-            # Slide from right (user) or left (assistant)
-            slide = QPropertyAnimation(bubble, b"pos")
-            slide.setDuration(_MSG_SLIDE_MS)
-            slide.setEasingCurve(QEasingCurve.OutCubic)
+            self._insert_before_spacer(row)
+
+            # Typewriter: start with empty, reveal char by char
+            text_label.setText("")
+            row._typewriter_label = text_label
+            row._typewriter_full = content
+            row._typewriter_pos = 0
+            timer = QTimer(row)
+            timer.timeout.connect(lambda r=row: self._typewriter_step(r))
+            timer.start(_TYPEWRITER_MS)
+            row._typewriter_timer = timer
+        elif role == "user":
+            # User: bubble, right-aligned, fade-in only (no slide)
+            bubble = _MessageBubble(role, content, parent=self._msg_container)
+            bubble.setMaximumWidth(int(self.width() * 0.8))
+            bubble.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+
+            wrapper = QWidget(self._msg_container)
+            wrapper_layout = QHBoxLayout(wrapper)
+            wrapper_layout.setContentsMargins(0, 0, 0, 0)
+            wrapper_layout.addStretch()
+            wrapper_layout.addWidget(bubble)
 
             self._insert_before_spacer(wrapper)
-            # Force layout so bubble gets a real position
-            wrapper_layout.activate()
-            target_pos = bubble.pos()
-            if role == "user":
-                slide.setStartValue(QPoint(target_pos.x() + 80, target_pos.y()))
-            else:
-                slide.setStartValue(QPoint(target_pos.x() - 80, target_pos.y()))
-            slide.setEndValue(target_pos)
 
-            group = QParallelAnimationGroup()
-            group.addAnimation(fade)
-            group.addAnimation(slide)
-            group.start()
-            # Store reference to prevent GC
-            bubble._anim_group = group
-
-            # Typewriter effect for AI messages
-            if role == "assistant":
-                bubble._typewriter_full = content
-                bubble._typewriter_pos = 0
-                bubble._label.setText("")
-                bubble._typewriter_timer = QTimer(bubble)
-                bubble._typewriter_timer.timeout.connect(
-                    lambda b=bubble: self._typewriter_step(b)
-                )
-                bubble._typewriter_timer.start(_TYPEWRITER_MS)
+            # Fade-in only
+            opacity_effect = QGraphicsOpacityEffect(wrapper)
+            opacity_effect.setOpacity(0.0)
+            wrapper.setGraphicsEffect(opacity_effect)
+            fade = QPropertyAnimation(opacity_effect, b"opacity")
+            fade.setDuration(_MSG_SLIDE_MS)
+            fade.setStartValue(0.0)
+            fade.setEndValue(1.0)
+            fade.setEasingCurve(QEasingCurve.OutCubic)
+            fade.start()
+            wrapper._fade_anim = fade
         else:
+            bubble = _MessageBubble(role, content, parent=self._msg_container)
             self._insert_before_spacer(bubble)
 
         self._smooth_scroll_to_bottom()
 
-    def _typewriter_step(self, bubble: _MessageBubble) -> None:
-        """Type one more character on an AI bubble."""
-        full = getattr(bubble, "_typewriter_full", "")
-        pos = getattr(bubble, "_typewriter_pos", 0)
-        if pos < len(full):
+    def _typewriter_step(self, row: QWidget) -> None:
+        """Type one more character for AI reply."""
+        label = getattr(row, "_typewriter_label", None)
+        full = getattr(row, "_typewriter_full", "")
+        pos = getattr(row, "_typewriter_pos", 0)
+        if label and pos < len(full):
             pos += 1
-            bubble._typewriter_pos = pos
-            bubble._label.setText(full[:pos])
+            row._typewriter_pos = pos
+            label.setText(full[:pos])
         else:
-            timer = getattr(bubble, "_typewriter_timer", None)
+            timer = getattr(row, "_typewriter_timer", None)
             if timer:
                 timer.stop()
 
