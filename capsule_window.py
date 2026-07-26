@@ -135,7 +135,7 @@ class CapsuleWindow(QMainWindow):
         self.setWindowFlags(
             Qt.FramelessWindowHint
             | Qt.WindowStaysOnTopHint
-            | Qt.SubWindow
+            | Qt.Window
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setFixedSize(CAPSULE_SIZE, CAPSULE_SIZE)
