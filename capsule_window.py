@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 CAPSULE_SIZE = 48          # 胶囊直径 (px)
 SNAP_DURATION = 220        # 吸附动画时长 (ms)
-IDLE_TIMEOUT = 10_000      # 空闲超时 (ms) — 10 秒
+IDLE_TIMEOUT = 5_000       # 空闲超时 (ms) — 5 秒
 CLICK_THRESHOLD = 3        # 点击判定阈值 (px) — 移动小于此值视为单击
 DIM_OPACITY = 0.5          # 变暗时的透明度
 
@@ -217,12 +217,35 @@ class CapsuleWindow(QMainWindow):
         super().mouseReleaseEvent(event)
 
     def enterEvent(self, event: QEnterEvent) -> None:
-        """鼠标进入胶囊区域 → 变亮 + 重置空闲计时器。"""
+        """鼠标进入 → 滑出完全显示 + 变亮 + 重置计时器。"""
         if self.auto_hidden:
             self.auto_hidden = False
             self.update()
+        self._animate_slide_out()
         self._reset_idle()
         super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        """鼠标离开 → 滑回半隐藏。"""
+        self.snap_to_half_hidden()
+        super().leaveEvent(event)
+
+    def _animate_slide_out(self) -> None:
+        """滑出动画：胶囊从半隐藏位置滑到完全可见。"""
+        screen = QApplication.screenAt(self.pos()) or QApplication.primaryScreen()
+        if screen is None:
+            return
+        geom = screen.availableGeometry()
+        target_x = geom.left()  # fully visible at screen edge
+        target_y = self.pos().y()
+        target = QPoint(target_x, target_y)
+
+        anim = QPropertyAnimation(self, b"pos", self)
+        anim.setDuration(180)
+        anim.setStartValue(self.pos())
+        anim.setEndValue(target)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.start()
 
     # ═══════════════════════════════════════════════════════════════
     # 吸附动画
