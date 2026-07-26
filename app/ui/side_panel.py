@@ -65,8 +65,8 @@ _CLR_BORDER_LIGHT = "rgba(0, 0, 0, 0.06)"
 _CLR_TEXT_PRIMARY = "#1a1a2e"
 _CLR_TEXT_SECONDARY = "#666666"
 _CLR_TEXT_MUTED = "#999999"
-_CLR_USER_BUBBLE = "rgba(31, 111, 235, 0.12)"
-_CLR_USER_BUBBLE_BORDER = "rgba(31, 111, 235, 0.25)"
+_CLR_USER_BUBBLE = "rgba(0, 0, 0, 0.07)"
+_CLR_USER_BUBBLE_BORDER = "rgba(0, 0, 0, 0.12)"
 _CLR_ASSISTANT_BUBBLE = "rgba(0, 0, 0, 0.04)"
 _CLR_ASSISTANT_BORDER = "rgba(0, 0, 0, 0.08)"
 _CLR_BTN_SEND = "#238636"
@@ -128,45 +128,48 @@ class _MessageBubble(QFrame):
             self.setStyleSheet(self._bubble_qss(
                 bg=_CLR_USER_BUBBLE,
                 border=_CLR_USER_BUBBLE_BORDER,
-                radius="12px 12px 4px 12px",
+                radius="14px 14px 3px 14px",
             ))
             align = Qt.AlignRight
             self._label.setStyleSheet(
-                "color: #1a1a2e; font-size: 14px; background: transparent; border: none;"
+                "color: #1a1a2e; font-size: 13px; background: transparent; border: none;"
             )
             self._time_label.setStyleSheet(
-                "color: rgba(0,0,0,0.35); font-size: 10px; background: transparent;"
+                "color: rgba(0,0,0,0.3); font-size: 9px; background: transparent;"
             )
         elif self._role == "assistant":
             self.setStyleSheet(self._bubble_qss(
                 bg=_CLR_ASSISTANT_BUBBLE,
                 border=_CLR_ASSISTANT_BORDER,
-                radius="12px 12px 12px 4px",
+                radius="14px 14px 14px 3px",
             ))
             align = Qt.AlignLeft
             self._label.setStyleSheet(
-                "color: #1a1a2e; font-size: 14px; background: transparent; border: none;"
+                "color: #1a1a2e; font-size: 13px; background: transparent; border: none;"
             )
             self._time_label.setStyleSheet(
-                "color: rgba(0,0,0,0.3); font-size: 10px; background: transparent;"
+                "color: rgba(0,0,0,0.3); font-size: 9px; background: transparent;"
             )
         else:  # system
             self.setStyleSheet(self._bubble_qss(
                 bg="transparent",
                 border="none",
                 radius="0px",
-                padding="6px 10px",
+                padding="4px 8px",
             ))
             align = Qt.AlignCenter
             self._label.setStyleSheet(
                 "color: #999999; font-size: 12px; background: transparent; border: none;"
             )
             self._time_label.setStyleSheet(
-                "color: #30363d; font-size: 10px; background: transparent;"
+                "color: #ccc; font-size: 10px; background: transparent;"
             )
 
         self._label.setAlignment(align | Qt.AlignVCenter)
         self._time_label.setAlignment(align)
+        # Adaptive sizing — bubble shrinks to content
+        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        self._label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
 
     @staticmethod
     def _bubble_qss(
@@ -766,11 +769,9 @@ class SidePanel(QMainWindow):
             wrapper_layout = QHBoxLayout(wrapper)
             wrapper_layout.setContentsMargins(0, 0, 0, 0)
 
-            # Bubble width: ~75% of panel width
-            panel_w = self.width()
-            bubble_w = max(int(panel_w * 0.75), 200)
-            bubble.setMaximumWidth(bubble_w)
-            bubble.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            # Adaptive sizing: bubble fits content, max 80% of panel
+            bubble.setMaximumWidth(int(self.width() * 0.8))
+            bubble.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
 
             if role == "user":
                 wrapper_layout.addStretch()
