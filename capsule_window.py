@@ -234,14 +234,7 @@ class CapsuleWindow(QMainWindow):
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        """鼠标离开 → 先检查是否真的在外面（防止 widget 移动导致的假离开）。"""
-        from PySide6.QtGui import QCursor
-        global_pos = QCursor.pos()
-        local_pos = self.mapFromGlobal(global_pos)
-        if self.rect().contains(local_pos):
-            # Mouse still over widget, widget just moved under it
-            super().leaveEvent(event)
-            return
+        """鼠标离开 → 延迟缩回半隐藏。"""
         if self._leave_timer is None:
             self._leave_timer = QTimer(self)
             self._leave_timer.setSingleShot(True)
