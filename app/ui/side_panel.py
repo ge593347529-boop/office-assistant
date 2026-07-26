@@ -1,23 +1,37 @@
-"""WorkBuddy/CodeBuddy 风格三栏聊天面板 — 深色毛玻璃 + 完整动效"""
+# -*- coding: utf-8 -*-
+"""Side panel window -- frameless, semi-transparent chat panel that slides in from the left edge.
+
+Architecture
+------------
+- **SidePanel** (QMainWindow): top-level frameless window with slide animation.
+- **Internal widgets**:
+  - ``_MessageBubble``: user / assistant / system message bubbles.
+  - ``_TypingIndicator``: animated three-dot indicator.
+  - **Title bar**: settings (gear) and close (X) buttons.
+  - **Chat area**: scrollable message list with auto-scroll.
+  - **Input area**: QTextEdit + send button, Enter-to-send / Shift+Enter-newline.
+- **Integration**:
+  - Reuses ``ConfirmCard`` from ``app.ui.confirm_card`` for task confirmation.
+  - Wires up ``InferenceEngine``, ``TaskExecutor``, ``ConversationManager``, ``MemoryStore``.
+"""
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
+from PySide6.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QScrollArea, QTextEdit, QPushButton, QLabel, QFrame,
+    QSizePolicy, QApplication, QProgressBar, QGraphicsOpacityEffect,
+)
 from PySide6.QtCore import (
-    Qt, Signal, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QRect,
-    QThread, QRectF,
+    Qt, Signal, QTimer, QPropertyAnimation, QEasingCurve, QPoint, QEvent,
+    QParallelAnimationGroup, QSequentialAnimationGroup, QRect, QThread,
 )
 from PySide6.QtGui import (
-    QColor, QFont, QPainter, QPen, QBrush, QLinearGradient, QTextCursor,
-    QCloseEvent,
-)
-from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QScrollArea,
-    QTextEdit, QPushButton, QLabel, QFrame, QSizePolicy, QProgressBar,
-    QApplication, QSplitter,
+    QColor, QPalette, QFont, QTextCursor, QKeyEvent, QMouseEvent, QPainter,
 )
 
 from app.config.settings import AppConfig
@@ -29,312 +43,245 @@ from app.ui.confirm_card import ConfirmCard
 
 logger = logging.getLogger(__name__)
 
-# ═══════════════════════════════════════════════════════════════
-# Design constants — dark glassmorphism
-# ═══════════════════════════════════════════════════════════════
-_CLR_BG = "#0d1117"
-_CLR_GLASS = "rgba(22, 27, 34, 0.94)"
-_CLR_SURFACE = "#161b22"
-_CLR_BORDER = "rgba(255, 255, 255, 0.08)"
-_CLR_BORDER_FOCUS = "rgba(255, 255, 255, 0.15)"
-_CLR_TEXT = "#c9d1d9"
-_CLR_TEXT_MUTED = "#8b949e"
-_CLR_ACCENT = "#6ecbf5"
-_CLR_USER_BUBBLE = "#1a2332"
-_CLR_AI_BUBBLE = "transparent"
-_CLR_SEND_BTN = "#238636"
-_CLR_SEND_HOVER = "#2ea043"
-_CLR_NAV_BG = "rgba(13, 17, 23, 0.97)"
-_CLR_RESULT_BG = "rgba(13, 17, 23, 0.97)"
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
 
-_NAV_WIDTH = 180
-_RESULT_WIDTH = 300
-_CURSOR_BLINK_MS = 500
-_SLIDE_DURATION = 350
-_TYPEWRITER_INTERVAL = 25  # ms per char
+_PANEL_WIDTH_RATIO = 0.25        # 25 % of screen width
+_PANEL_ASPECT = 2.0 / 1.5        # width:height = 2:1.5, so height = width / aspect
+_LEFT_MARGIN_RATIO = 0.01        # 1 % margin from left edge
+_SLIDE_DURATION_MS = 300         # slide animation duration
+_TYPING_INTERVAL_MS = 400        # typing dot cycle interval
+_CURSOR_BLINK_MS = 500           # cursor blink interval
+_MSG_SLIDE_MS = 350              # message slide-in duration
+_TYPEWRITER_MS = 25              # typewriter interval per character
+_CURSOR_COLOR = "#6ecbf5"        # custom cursor color
 
-FONT_FAMILY = '"Segoe UI", system-ui, -apple-system, sans-serif'
+_TITLE_BAR_HEIGHT = 40
+_INPUT_MAX_HEIGHT = 120
+_INPUT_MIN_HEIGHT = 38
+
+# Codex dark color palette
+_CLR_BG = "#f0f0f0"
+_CLR_BG_GLASS = "rgba(255, 255, 255, 0.88)"
+_CLR_SURFACE = "#ffffff"
+_CLR_BORDER = "rgba(0, 0, 0, 0.12)"
+_CLR_BORDER_LIGHT = "rgba(0, 0, 0, 0.06)"
+_CLR_TEXT_PRIMARY = "#1a1a2e"
+_CLR_TEXT_SECONDARY = "#666666"
+_CLR_TEXT_MUTED = "#999999"
+_CLR_USER_BUBBLE = "rgba(0, 0, 0, 0.07)"
+_CLR_USER_BUBBLE_BORDER = "rgba(0, 0, 0, 0.12)"
+_CLR_ASSISTANT_BUBBLE = "rgba(0, 0, 0, 0.04)"
+_CLR_ASSISTANT_BORDER = "rgba(0, 0, 0, 0.08)"
+_CLR_BTN_SEND = "#238636"
+_CLR_BTN_SEND_HOVER = "#2ea043"
+_CLR_BTN_SEND_PRESSED = "#196c2e"
+_CLR_ACCENT = "#238636"
 
 
-# ═══════════════════════════════════════════════════════════════
-# Typewriter thread — non-blocking
-# ═══════════════════════════════════════════════════════════════
-class TypewriterThread(QThread):
-    char_written = Signal(int, str)  # bubble_index, incremental full text
+# ---------------------------------------------------------------------------
+# Message Bubble
+# ---------------------------------------------------------------------------
 
-    def __init__(self, full_text: str, bubble_index: int, parent=None):
+class _MessageBubble(QFrame):
+    """A single chat message bubble.
+
+    Parameters
+    ----------
+    role : str
+        One of ``"user"``, ``"assistant"``, ``"system"``.
+    content : str
+        The message text.
+    parent : QWidget | None
+        Parent widget.
+    """
+
+    def __init__(
+        self,
+        role: str,
+        content: str,
+        parent: Optional[QWidget] = None,
+    ) -> None:
         super().__init__(parent)
-        self._text = full_text
-        self._idx = bubble_index
-        self._pos = 0
+        self.setObjectName("SideBubble")
 
-    def run(self) -> None:
-        while self._pos < len(self._text):
-            self._pos += 1
-            self.char_written.emit(self._idx, self._text[:self._pos])
-            self.msleep(_TYPEWRITER_INTERVAL)
-
-    def stop(self) -> None:
-        self._pos = len(self._text)
-
-
-# ═══════════════════════════════════════════════════════════════
-# Custom cursor — blinking 3px #6ecbf5
-# ═══════════════════════════════════════════════════════════════
-class _ChatInput(QTextEdit):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("ChatInput")
-        self.setPlaceholderText("输入你想做的事情... (Enter 发送, Shift+Enter 换行)")
-        self.setMaximumHeight(120)
-        self.setMinimumHeight(42)
-        self.setAcceptRichText(False)
-        self.setTabChangesFocus(True)
-        font = QFont()
-        font.setFamilies([FONT_FAMILY])
-        font.setPointSize(13)
-        self.setFont(font)
-        self.document().setDefaultFont(font)
-
-        # Blinking cursor
-        self._cursor_visible = True
-        self._cursor_timer = QTimer(self)
-        self._cursor_timer.timeout.connect(self._toggle_cursor)
-        self._cursor_timer.start(_CURSOR_BLINK_MS)
-        self._custom_cursor_color = QColor(_CLR_ACCENT)
-
-    def _toggle_cursor(self) -> None:
-        self._cursor_visible = not self._cursor_visible
-        self.viewport().update()
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        if self.hasFocus() and self._cursor_visible:
-            cursor = self.textCursor()
-            if not cursor.hasSelection():
-                rect = self.cursorRect()
-                if rect.isValid():
-                    painter = QPainter(self.viewport())
-                    painter.setPen(Qt.NoPen)
-                    painter.setBrush(QBrush(self._custom_cursor_color))
-                    painter.drawRect(
-                        rect.x(), rect.y(), 3,
-                        self.fontMetrics().height()
-                    )
-                    painter.end()
-
-    def focusInEvent(self, event):
-        super().focusInEvent(event)
-        self._cursor_visible = True
-        self._cursor_timer.start()
-
-    def focusOutEvent(self, event):
-        super().focusOutEvent(event)
-        self._cursor_timer.stop()
-        self.viewport().update()
-
-
-# ═══════════════════════════════════════════════════════════════
-# Message widget — slide-in + fade animation
-# ═══════════════════════════════════════════════════════════════
-class MessageWidget(QFrame):
-    def __init__(self, role: str, parent=None):
-        super().__init__(parent)
         self._role = role
-        self.setObjectName(f"Msg_{role}")
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
+        layout.setSpacing(4)
 
-        self._label = QLabel()
+        # Content label
+        self._label = QLabel(content)
         self._label.setWordWrap(True)
         self._label.setTextFormat(Qt.PlainText)
         self._label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(self._label)
 
-        self._time_label = QLabel(datetime.now().strftime("%H:%M"))
+        # Timestamp
+        ts = datetime.now().strftime("%H:%M")
+        self._time_label = QLabel(ts)
         layout.addWidget(self._time_label)
 
-        self._setup_style()
+        self._apply_role_style()
+
+    # ── Style per role ──────────────────────────────────────────────────
+
+    def _apply_role_style(self) -> None:
+        """Set bubble background, alignment, and text colors by role."""
+        if self._role == "user":
+            self.setStyleSheet(self._bubble_qss(
+                bg=_CLR_USER_BUBBLE,
+                border=_CLR_USER_BUBBLE_BORDER,
+                radius="14px 14px 3px 14px",
+            ))
+            align = Qt.AlignRight
+            self._label.setStyleSheet(
+                "color: #1a1a2e; font-size: 13px; background: transparent; border: none;"
+            )
+            self._time_label.setStyleSheet(
+                "color: rgba(0,0,0,0.3); font-size: 9px; background: transparent;"
+            )
+        elif self._role == "assistant":
+            self.setStyleSheet(self._bubble_qss(
+                bg=_CLR_ASSISTANT_BUBBLE,
+                border=_CLR_ASSISTANT_BORDER,
+                radius="14px 14px 14px 3px",
+            ))
+            align = Qt.AlignLeft
+            self._label.setStyleSheet(
+                "color: #1a1a2e; font-size: 13px; background: transparent; border: none;"
+            )
+            self._time_label.setStyleSheet(
+                "color: rgba(0,0,0,0.3); font-size: 9px; background: transparent;"
+            )
+        else:  # system
+            self.setStyleSheet(self._bubble_qss(
+                bg="transparent",
+                border="none",
+                radius="0px",
+                padding="4px 8px",
+            ))
+            align = Qt.AlignCenter
+            self._label.setStyleSheet(
+                "color: #999999; font-size: 12px; background: transparent; border: none;"
+            )
+            self._time_label.setStyleSheet(
+                "color: #ccc; font-size: 10px; background: transparent;"
+            )
+
+        self._label.setAlignment(align | Qt.AlignVCenter)
+        self._time_label.setAlignment(align)
+        # Adaptive sizing — bubble shrinks to content
+        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        self._label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+
+    @staticmethod
+    def _bubble_qss(
+        bg: str,
+        border: str,
+        radius: str,
+        padding: str = "10px 14px",
+    ) -> str:
+        """Compose a QSS block for the bubble frame."""
+        return (
+            f"QFrame#SideBubble {{\n"
+            f"  background-color: {bg};\n"
+            f"  border: 1px solid {border};\n"
+            f"  border-radius: {radius};\n"
+            f"  padding: {padding};\n"
+            f"}}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Typing Indicator
+# ---------------------------------------------------------------------------
+
+class _TypingIndicator(QWidget):
+    """Animated three-dot typing indicator (● ○ ○ → ○ ● ○ → ○ ○ ●)."""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("TypingIndicator")
+        self.setFixedHeight(32)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 4, 16, 4)
+        layout.setSpacing(0)
+
+        # Left-align the label inside a row
+        self._label = QLabel("● ○ ○")
+        self._label.setObjectName("TypingLabel")
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self._label)
+        row.addStretch()
+        layout.addLayout(row)
+
+        self._step = 0
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+
+    # ── Public ──────────────────────────────────────────────────────────
+
+    def start(self) -> None:
+        """Begin the dot animation."""
+        self._step = 0
+        self._label.setText("● ○ ○")
+        self._timer.start(_TYPING_INTERVAL_MS)
+        self.setVisible(True)
+
+    def stop(self) -> None:
+        """Stop the animation and hide the indicator."""
+        self._timer.stop()
         self.setVisible(False)
 
-    def _setup_style(self) -> None:
-        if self._role == "user":
-            self.setStyleSheet(
-                f"QFrame#{self.objectName()} {{"
-                f"  background-color: {_CLR_USER_BUBBLE};"
-                f"  border: 1px solid {_CLR_BORDER};"
-                f"  border-radius: 12px;"
-                f"  padding: 10px 14px;"
-                f"}}"
-            )
-            self._label.setStyleSheet(
-                f"color: {_CLR_TEXT}; font-size: 14px; background: transparent;"
-                f"font-family: {FONT_FAMILY};"
-            )
-            self._time_label.setStyleSheet(
-                f"color: {_CLR_TEXT_MUTED}; font-size: 10px; background: transparent;"
-            )
-            self._time_label.setAlignment(Qt.AlignRight)
-        else:
-            self.setStyleSheet(
-                f"QFrame#{self.objectName()} {{"
-                f"  background-color: transparent;"
-                f"  border: none;"
-                f"  padding: 8px 12px;"
-                f"}}"
-            )
-            self._label.setStyleSheet(
-                f"color: {_CLR_TEXT}; font-size: 14px; background: transparent;"
-                f"font-family: {FONT_FAMILY};"
-            )
-            self._time_label.setStyleSheet(
-                f"color: {_CLR_TEXT_MUTED}; font-size: 10px; background: transparent;"
-            )
+    # ── Internal ────────────────────────────────────────────────────────
 
-    def set_text(self, text: str) -> None:
-        self._label.setText(text)
-
-    def play_slide_in(self, from_right: bool = True) -> None:
-        self.setVisible(True)
-        w = self.width() or 400
-        start_x = w if from_right else -w
-
-        # Position animation
-        self._pos_anim = QPropertyAnimation(self, b"pos")
-        self._pos_anim.setDuration(_SLIDE_DURATION)
-        self._pos_anim.setStartValue(QPoint(start_x, self.y()))
-        self._pos_anim.setEndValue(QPoint(0, self.y()))
-        self._pos_anim.setEasingCurve(QEasingCurve.OutCubic)
-
-        # Opacity via windowOpacity-like effect — use graphics effect
-        self._opacity_effect = self._make_fade_in()
-        self.setGraphicsEffect(self._opacity_effect)
-
-        self._pos_anim.start()
-
-    def _make_fade_in(self):
-        from PySide6.QtWidgets import QGraphicsOpacityEffect
-        effect = QGraphicsOpacityEffect(self)
-        effect.setOpacity(0.0)
-        anim = QPropertyAnimation(effect, b"opacity")
-        anim.setDuration(_SLIDE_DURATION)
-        anim.setStartValue(0.0)
-        anim.setEndValue(1.0)
-        anim.setEasingCurve(QEasingCurve.OutCubic)
-        anim.start()
-        return effect
+    def _tick(self) -> None:
+        """Cycle through the three dot states."""
+        patterns = [
+            "● ○ ○",
+            "○ ● ○",
+            "○ ○ ●",
+        ]
+        self._label.setText(patterns[self._step % 3])
+        self._step += 1
 
 
-# ═══════════════════════════════════════════════════════════════
-# Left navigation panel — 180px
-# ═══════════════════════════════════════════════════════════════
-class NavPanel(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("NavPanel")
-        self.setFixedWidth(_NAV_WIDTH)
-        self.setStyleSheet(f"""
-            #NavPanel {{
-                background-color: {_CLR_NAV_BG};
-                border-right: 1px solid {_CLR_BORDER};
-            }}
-        """)
+# ---------------------------------------------------------------------------
+# Side Panel
+# ---------------------------------------------------------------------------
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 16, 12, 16)
-        layout.setSpacing(8)
-
-        title = QLabel("AI 办公助手")
-        title.setStyleSheet(
-            f"color: {_CLR_TEXT}; font-size: 14px; font-weight: 700;"
-            f"font-family: {FONT_FAMILY}; background: transparent; padding: 4px 0 12px 0;"
-        )
-        layout.addWidget(title)
-
-        # Menu items
-        menu_style = (
-            f"QPushButton {{"
-            f"  color: {_CLR_TEXT_MUTED}; background: transparent; border: none;"
-            f"  border-radius: 6px; padding: 8px 10px; text-align: left;"
-            f"  font-size: 13px; font-family: {FONT_FAMILY};"
-            f"}}"
-            f"QPushButton:hover {{ background: {_CLR_SURFACE}; color: {_CLR_TEXT}; }}"
-        )
-
-        self._chat_btn = QPushButton("💬 对话")
-        self._chat_btn.setStyleSheet(menu_style)
-        layout.addWidget(self._chat_btn)
-
-        self._tasks_btn = QPushButton("📋 任务")
-        self._tasks_btn.setStyleSheet(menu_style)
-        layout.addWidget(self._tasks_btn)
-
-        self._history_btn = QPushButton("🕐 历史")
-        self._history_btn.setStyleSheet(menu_style)
-        layout.addWidget(self._history_btn)
-
-        self._settings_btn = QPushButton("⚙️ 设置")
-        self._settings_btn.setStyleSheet(menu_style)
-        layout.addWidget(self._settings_btn)
-
-        layout.addStretch()
-
-        ver = QLabel("v0.2.0")
-        ver.setStyleSheet(
-            f"color: {_CLR_TEXT_MUTED}; font-size: 11px; background: transparent;"
-        )
-        layout.addWidget(ver)
-
-
-# ═══════════════════════════════════════════════════════════════
-# Right result panel — 300px
-# ═══════════════════════════════════════════════════════════════
-class ResultPanel(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("ResultPanel")
-        self.setFixedWidth(_RESULT_WIDTH)
-        self.setStyleSheet(f"""
-            #ResultPanel {{
-                background-color: {_CLR_RESULT_BG};
-                border-left: 1px solid {_CLR_BORDER};
-            }}
-        """)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 16, 12, 16)
-        layout.setSpacing(8)
-
-        title = QLabel("成果")
-        title.setStyleSheet(
-            f"color: {_CLR_TEXT}; font-size: 14px; font-weight: 700;"
-            f"font-family: {FONT_FAMILY}; background: transparent; padding: 4px 0 8px 0;"
-        )
-        layout.addWidget(title)
-
-        self._content = QLabel("暂无任务结果")
-        self._content.setWordWrap(True)
-        self._content.setAlignment(Qt.AlignTop)
-        self._content.setStyleSheet(
-            f"color: {_CLR_TEXT_MUTED}; font-size: 12px; background: transparent;"
-            f"font-family: {FONT_FAMILY};"
-        )
-        layout.addWidget(self._content, stretch=1)
-
-    def set_result(self, text: str) -> None:
-        self._content.setText(text)
-
-
-# ═══════════════════════════════════════════════════════════════
-# Main SidePanel — three-panel layout
-# ═══════════════════════════════════════════════════════════════
 class SidePanel(QMainWindow):
+    """Frameless, semi-transparent side panel that slides in from the left edge.
+
+    Contains the full AI office assistant chat interface: message bubbles,
+    typing indicator, task confirmation cards, and input bar.
+
+    Signals
+    -------
+    settings_requested :
+        Emitted when the user clicks the settings (gear) button.
+    panel_closed :
+        Emitted when the panel finishes hiding (close button or hide_panel).
+    """
+
     settings_requested = Signal()
     panel_closed = Signal()
 
-    def __init__(self, config: AppConfig, memory: MemoryStore) -> None:
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def __init__(
+        self,
+        config: AppConfig,
+        memory: MemoryStore,
+    ) -> None:
         super().__init__()
         self.config = config
         self.memory = memory
@@ -344,430 +291,800 @@ class SidePanel(QMainWindow):
 
         self._current_task: Optional[TaskResult] = None
         self._chrome_connected: bool = False
-        self._msg_widgets: list[MessageWidget] = []
-        self._typewriter: Optional[TypewriterThread] = None
-        self._target_x: int = 0
         self._slide_anim: Optional[QPropertyAnimation] = None
         self._is_sliding: bool = False
+        self._target_x: int = 0
 
         self._setup_window()
         self._setup_ui()
-        self._hide_offscreen()
+        self._apply_global_style()
 
-        logger.info("SidePanel (WorkBuddy-style) initialized")
+        logger.info("SidePanel initialized")
 
-    # ── Window ──────────────────────────────────────────────────
+    # ------------------------------------------------------------------
+    # Window properties
+    # ------------------------------------------------------------------
+
     def _setup_window(self) -> None:
+        """Configure frameless, semi-transparent window geometry."""
         self.setWindowFlags(
-            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
+            Qt.FramelessWindowHint
+            | Qt.WindowStaysOnTopHint
+            | Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WA_ShowWithoutActivating, False)
 
         screen = QApplication.primaryScreen()
-        screen_geom = screen.availableGeometry() if screen else QRect(0, 0, 1920, 1080)
+        if screen is None:
+            screen_geom = QRect(0, 0, 1920, 1080)
+        else:
+            screen_geom = screen.availableGeometry()
 
-        w = int(screen_geom.width() * 0.42)
-        h = int(screen_geom.height() * 0.88)
-        x = int(screen_geom.width() * 0.01)
+        w = int(screen_geom.width() * _PANEL_WIDTH_RATIO)
+        h = int(w / _PANEL_ASPECT)
+        x = int(screen_geom.width() * _LEFT_MARGIN_RATIO)
         y = int((screen_geom.height() - h) / 2)
 
         self._target_x = x
         self.setGeometry(x, y, w, h)
-        self.setMinimumWidth(700)
-        self.setMinimumHeight(450)
+        self.setMinimumWidth(280)
+        self.setMinimumHeight(400)
+
+        # Start off-screen for slide-in
+        self._hide_offscreen()
 
     def _hide_offscreen(self) -> None:
+        """Move the window off-screen to the left (hidden state)."""
         self.move(-self.width(), self.y())
+        self.setVisible(False)
 
-    # ── Three-panel UI ──────────────────────────────────────────
+    # ------------------------------------------------------------------
+    # UI construction
+    # ------------------------------------------------------------------
+
     def _setup_ui(self) -> None:
-        root = QWidget(self)
+        """Build the panel: title bar, chat area, typing indicator, input bar."""
+        # Root container widget (rounded corners + border)
+        root = QWidget()
         root.setObjectName("PanelRoot")
-        root.setStyleSheet(f"""
-            #PanelRoot {{
-                background-color: {_CLR_GLASS};
-                border: 1px solid {_CLR_BORDER};
-                border-radius: 12px;
-            }}
-        """)
         self.setCentralWidget(root)
 
-        h_layout = QHBoxLayout(root)
-        h_layout.setContentsMargins(0, 0, 0, 0)
-        h_layout.setSpacing(0)
+        main_layout = QVBoxLayout(root)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # Left nav
-        self.nav = NavPanel(root)
-        h_layout.addWidget(self.nav)
+        # ── Title bar ──────────────────────────────────────────────────
+        self._title_bar = self._build_title_bar()
+        main_layout.addWidget(self._title_bar)
 
-        # Center chat
-        self.chat_area = self._build_chat_area(root)
-        h_layout.addWidget(self.chat_area, stretch=1)
-
-        # Right results
-        self.results = ResultPanel(root)
-        h_layout.addWidget(self.results)
-
-    def _build_chat_area(self, parent) -> QWidget:
-        widget = QWidget(parent)
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        # Title bar
-        title_bar = QWidget()
-        title_bar.setObjectName("TitleBar")
-        title_bar.setFixedHeight(40)
-        title_bar.setStyleSheet(f"""
-            #TitleBar {{
-                background-color: {_CLR_SURFACE};
-                border-bottom: 1px solid {_CLR_BORDER};
-                border-radius: 0 12px 0 0;
-            }}
-        """)
-        tb_layout = QHBoxLayout(title_bar)
-        tb_layout.setContentsMargins(12, 0, 8, 0)
-
-        title_lbl = QLabel("对话")
-        title_lbl.setStyleSheet(
-            f"color: {_CLR_TEXT}; font-size: 13px; font-weight: 600;"
-            f"font-family: {FONT_FAMILY}; background: transparent;"
-        )
-        tb_layout.addWidget(title_lbl)
-        tb_layout.addStretch()
-
-        close_btn = QPushButton("✕")
-        close_btn.setFixedSize(28, 28)
-        close_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; border: none; color: {_CLR_TEXT_MUTED};"
-            f"  border-radius: 4px; font-size: 14px; }}"
-            f"QPushButton:hover {{ background: #da3633; color: #fff; }}"
-        )
-        close_btn.clicked.connect(self.hide_panel)
-        tb_layout.addWidget(close_btn)
-        layout.addWidget(title_bar)
-
-        # Message scroll area
-        self._scroll = QScrollArea()
-        self._scroll.setObjectName("ChatScroll")
-        self._scroll.setWidgetResizable(True)
-        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._scroll.setFrameShape(QFrame.NoFrame)
-        self._scroll.setStyleSheet(f"""
-            #ChatScroll {{ background: transparent; border: none; }}
-            QScrollBar:vertical {{
-                background: transparent; width: 5px; margin: 4px 2px;
-            }}
-            QScrollBar::handle:vertical {{
-                background: rgba(255,255,255,0.12); border-radius: 3px; min-height: 30px;
-            }}
-            QScrollBar::handle:vertical:hover {{ background: rgba(255,255,255,0.2); }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
-        """)
+        # ── Chat scroll area ───────────────────────────────────────────
+        self._scroll_area = QScrollArea()
+        self._scroll_area.setObjectName("ChatScrollArea")
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll_area.setFrameShape(QFrame.NoFrame)
 
         self._msg_container = QWidget()
-        self._msg_container.setObjectName("MsgContainer")
+        self._msg_container.setObjectName("MessageContainer")
         self._msg_layout = QVBoxLayout(self._msg_container)
-        self._msg_layout.setContentsMargins(16, 12, 16, 12)
-        self._msg_layout.setSpacing(12)
+        self._msg_layout.setContentsMargins(12, 8, 12, 8)
+        self._msg_layout.setSpacing(8)
 
+        # Bottom spacer keeps messages at the top when few
         self._msg_spacer = QWidget()
         self._msg_spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._msg_layout.addWidget(self._msg_spacer)
 
-        self._scroll.setWidget(self._msg_container)
-        layout.addWidget(self._scroll, stretch=1)
+        self._scroll_area.setWidget(self._msg_container)
+        main_layout.addWidget(self._scroll_area, stretch=1)
 
-        # Typing indicator
-        self._typing_label = QLabel()
-        self._typing_label.setObjectName("TypingLabel")
-        self._typing_label.setAlignment(Qt.AlignCenter)
-        self._typing_label.setFixedHeight(28)
-        self._typing_label.setVisible(False)
-        self._typing_label.setStyleSheet(
-            f"color: {_CLR_TEXT_MUTED}; font-size: 12px; background: transparent;"
-        )
-        layout.addWidget(self._typing_label)
+        # ── Typing indicator ───────────────────────────────────────────
+        self._typing_indicator = _TypingIndicator()
+        self._typing_indicator.setVisible(False)
+        main_layout.addWidget(self._typing_indicator)
 
-        # Input bar
-        input_bar = QWidget()
-        input_bar.setObjectName("InputBar")
-        input_bar.setStyleSheet(f"""
+        # ── Input bar ──────────────────────────────────────────────────
+        self._input_area = self._build_input_bar()
+        main_layout.addWidget(self._input_area)
+
+    # ── Title bar ──────────────────────────────────────────────────────
+
+    def _build_title_bar(self) -> QWidget:
+        """Create the custom title bar: title + settings + close buttons."""
+        bar = QWidget()
+        bar.setObjectName("TitleBar")
+        bar.setFixedHeight(_TITLE_BAR_HEIGHT)
+
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(12, 0, 8, 0)
+        layout.setSpacing(4)
+
+        # Drag handle area (the title text)
+        self._title_label = QLabel("AI 办公助手")
+        self._title_label.setObjectName("TitleLabel")
+        layout.addWidget(self._title_label)
+
+        layout.addStretch()
+
+        # Settings (gear) button
+        self._btn_settings = QPushButton("⚙")  # ⚙
+        self._btn_settings.setObjectName("TitleBtn")
+        self._btn_settings.setFixedSize(28, 28)
+        self._btn_settings.setCursor(Qt.PointingHandCursor)
+        self._btn_settings.setToolTip("设置")
+        self._btn_settings.clicked.connect(self.settings_requested.emit)
+        layout.addWidget(self._btn_settings)
+
+        # Spacing between gear and X
+        layout.addSpacing(4)
+
+        # Close button
+        self._btn_close = QPushButton("✕")  # ✕
+        self._btn_close.setObjectName("TitleBtnClose")
+        self._btn_close.setFixedSize(28, 28)
+        self._btn_close.setCursor(Qt.PointingHandCursor)
+        self._btn_close.setToolTip("关闭面板")
+        self._btn_close.clicked.connect(self.hide_panel)
+        layout.addWidget(self._btn_close)
+
+        return bar
+
+    # ── Input bar ──────────────────────────────────────────────────────
+
+    def _build_input_bar(self) -> QWidget:
+        """Create the bottom input area: QTextEdit + send button."""
+        bar = QWidget()
+        bar.setObjectName("InputBar")
+
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(8)
+
+        # Text input (single-line style, max 120px)
+        self._text_edit = QTextEdit()
+        self._text_edit.setObjectName("ChatInput")
+        self._text_edit.setPlaceholderText("输入你想做的事情...")
+        self._text_edit.setMaximumHeight(_INPUT_MAX_HEIGHT)
+        self._text_edit.setMinimumHeight(_INPUT_MIN_HEIGHT)
+        self._text_edit.setAcceptRichText(False)
+        self._text_edit.setTabChangesFocus(True)
+        self._text_edit.installEventFilter(self)
+
+        font = QFont()
+        font.setPointSize(13)
+        self._text_edit.setFont(font)
+        self._text_edit.document().setDefaultFont(font)
+
+        layout.addWidget(self._text_edit, stretch=1)
+
+        # Send button
+        self._btn_send = QPushButton("发送")
+        self._btn_send.setObjectName("SendButton")
+        self._btn_send.setFixedHeight(36)
+        self._btn_send.setMinimumWidth(64)
+        self._btn_send.setCursor(Qt.PointingHandCursor)
+        self._btn_send.clicked.connect(self._on_send_clicked)
+        layout.addWidget(self._btn_send)
+
+        # Custom blinking cursor (color via QSS, flash rate via Qt API)
+        QApplication.setCursorFlashTime(_CURSOR_BLINK_MS)
+
+        return bar
+
+    # ── Global stylesheet ──────────────────────────────────────────────
+
+    def _apply_global_style(self) -> None:
+        """Apply dark Codex + Python-island glass styles via QSS."""
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background: transparent;
+            }}
+
+            #PanelRoot {{
+                background-color: {_CLR_BG_GLASS};
+                border: 1px solid {_CLR_BORDER};
+                border-radius: 12px;
+            }}
+
+            #TitleBar {{
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                    stop:0 rgba(255,255,255,0.3), stop:1 rgba(255,255,255,0.6));
+                border-bottom: 1px solid {_CLR_BORDER_LIGHT};
+                border-radius: 12px 12px 0 0;
+            }}
+
+            #TitleLabel {{
+                color: {_CLR_TEXT_PRIMARY};
+                font-size: 13px;
+                font-weight: 600;
+                background: transparent;
+                border: none;
+                padding-left: 2px;
+            }}
+
+            #TitleBtn, #TitleBtnClose {{
+                background: transparent;
+                border: none;
+                border-radius: 4px;
+                color: {_CLR_TEXT_SECONDARY};
+                font-size: 14px;
+            }}
+            #TitleBtn:hover, #TitleBtnClose:hover {{
+                background-color: {_CLR_BORDER_LIGHT};
+                color: {_CLR_TEXT_PRIMARY};
+            }}
+            #TitleBtnClose:hover {{
+                background-color: #da3633;
+                color: #ffffff;
+            }}
+
+            #ChatScrollArea {{
+                background-color: transparent;
+                border: none;
+            }}
+
+            #MessageContainer {{
+                background-color: transparent;
+            }}
+
+            #TypingIndicator {{
+                background-color: {_CLR_SURFACE};
+                border-top: 1px solid {_CLR_BORDER_LIGHT};
+            }}
+            #TypingLabel {{
+                color: {_CLR_TEXT_SECONDARY};
+                font-size: 13px;
+                background: transparent;
+                border: none;
+            }}
+
             #InputBar {{
                 background-color: {_CLR_SURFACE};
-                border-top: 1px solid {_CLR_BORDER};
+                border-top: 1px solid {_CLR_BORDER_LIGHT};
+            }}
+
+            #ChatInput {{
+                border: 1px solid {_CLR_BORDER};
+                border-radius: 8px;
+                padding: 8px 12px;
+                background-color: {_CLR_BG};
+                color: {_CLR_TEXT_PRIMARY};
+                font-size: 14px;
+                selection-background-color: {_CLR_ACCENT};
+                caret-color: {_CURSOR_COLOR};
+            }}
+            #ChatInput:focus {{
+                border: 1px solid {_CLR_ACCENT};
+                caret-color: {_CURSOR_COLOR};
+            }}
+
+            #SendButton {{
+                background-color: {_CLR_BTN_SEND};
+                color: #ffffff;
+                border: none;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 600;
+                padding: 0 14px;
+            }}
+            #SendButton:hover {{
+                background-color: {_CLR_BTN_SEND_HOVER};
+            }}
+            #SendButton:pressed {{
+                background-color: {_CLR_BTN_SEND_PRESSED};
+            }}
+            #SendButton:disabled {{
+                background-color: {_CLR_BORDER_LIGHT};
+                color: {_CLR_TEXT_MUTED};
+            }}
+
+            QScrollBar:vertical {{
+                background: rgba(255,255,255,0.02);
+                width: 5px;
+                margin: 4px 2px;
+                border-radius: 3px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: rgba(255,255,255,0.15);
+                border-radius: 3px;
+                min-height: 30px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: rgba(255,255,255,0.25);
+            }}
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {{
+                height: 0;
             }}
         """)
-        ib_layout = QHBoxLayout(input_bar)
-        ib_layout.setContentsMargins(12, 8, 12, 8)
-        ib_layout.setSpacing(8)
 
-        self._input = _ChatInput()
-        ib_layout.addWidget(self._input, stretch=1)
+    # ------------------------------------------------------------------
+    # Event filter -- Enter / Shift+Enter handling
+    # ------------------------------------------------------------------
 
-        self._send_btn = QPushButton("发送")
-        self._send_btn.setObjectName("SendBtn")
-        self._send_btn.setFixedSize(68, 38)
-        self._send_btn.setCursor(Qt.PointingHandCursor)
-        self._send_btn.setStyleSheet(f"""
-            QPushButton#SendBtn {{
-                background-color: {_CLR_SEND_BTN};
-                color: #ffffff; border: none; border-radius: 6px;
-                font-size: 13px; font-weight: 600;
-                font-family: {FONT_FAMILY};
-            }}
-            QPushButton#SendBtn:hover {{ background-color: {_CLR_SEND_HOVER}; }}
-            QPushButton#SendBtn:pressed {{ background-color: #196c2e; }}
-            QPushButton#SendBtn:disabled {{
-                background-color: #21262d; color: #484f58;
-            }}
-        """)
-        self._send_btn.clicked.connect(self._on_send)
-        ib_layout.addWidget(self._send_btn)
-        layout.addWidget(input_bar)
+    def eventFilter(self, obj, event) -> bool:
+        """Intercept key presses in the input QTextEdit.
 
-        # Enter to send
-        self._input.installEventFilter(self)
-
-        return widget
-
-    def eventFilter(self, obj, event):
-        from PySide6.QtCore import QEvent
-        from PySide6.QtGui import QKeyEvent
-        if obj is self._input and event.type() == QEvent.KeyPress:
-            ke = event
-            if ke.key() in (Qt.Key_Return, Qt.Key_Enter):
-                if not (ke.modifiers() & Qt.ShiftModifier):
-                    self._on_send()
+        Enter without Shift → send.
+        Shift+Enter → insert newline.
+        """
+        if obj is self._text_edit and event.type() == QEvent.KeyPress:
+            key_event = event
+            if key_event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                if not (key_event.modifiers() & Qt.ShiftModifier):
+                    self._on_send_clicked()
                     return True
         return super().eventFilter(obj, event)
 
-    # ── Send + pulse animation ──────────────────────────────────
-    def _on_send(self) -> None:
-        text = self._input.toPlainText().strip()
+    # ------------------------------------------------------------------
+    # Send logic
+    # ------------------------------------------------------------------
+
+    def _on_send_clicked(self) -> None:
+        """Extract text from the input and submit."""
+        text = self._text_edit.toPlainText().strip()
         if not text:
             return
-        self._input.clear()
-        self._pulse_send_button()
+        self._text_edit.clear()
+        # Pulse animation on send button
+        self._animate_send_pulse()
         self._handle_user_input(text)
 
-    def _pulse_send_button(self) -> None:
-        btn = self._send_btn
-        orig = btn.size()
-        # Shrink
-        shrink = QPropertyAnimation(btn, b"geometry")
-        shrink.setDuration(100)
-        r = btn.geometry()
-        shrink.setStartValue(r)
-        cx, cy = r.center().x(), r.center().y()
-        sw, sh = int(r.width() * 0.85), int(r.height() * 0.85)
-        shrink.setEndValue(QRect(cx - sw // 2, cy - sh // 2, sw, sh))
-        shrink.setEasingCurve(QEasingCurve.OutQuad)
-        # Restore
-        restore = QPropertyAnimation(btn, b"geometry")
-        restore.setDuration(150)
-        restore.setStartValue(QRect(cx - sw // 2, cy - sh // 2, sw, sh))
-        restore.setEndValue(r)
-        restore.setEasingCurve(QEasingCurve.OutBack)
-        shrink.finished.connect(restore.start)
-        shrink.start()
+    def _animate_send_pulse(self) -> None:
+        """Pulse animation: button scales down then restores."""
+        anim = QPropertyAnimation(self._btn_send, b"geometry")
+        geo = self._btn_send.geometry()
+        shrink = QRect(geo.x() + 3, geo.y() + 2, geo.width() - 6, geo.height() - 4)
+        anim.setDuration(120)
+        anim.setStartValue(geo)
+        anim.setKeyValueAt(0.5, shrink)
+        anim.setEndValue(geo)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.start()
 
-    # ── AI Pipeline ─────────────────────────────────────────────
+    # ------------------------------------------------------------------
+    # User input → AI pipeline
+    # ------------------------------------------------------------------
+
     def _handle_user_input(self, text: str) -> None:
-        self._show_typing(True)
-        self._add_user_message(text)
+        """Process user message through the full AI pipeline.
 
+        Flow
+        ----
+        1. Add user bubble to chat
+        2. Show typing indicator
+        3. Call ``engine.infer(text)``
+        4. On result:
+           - ``general_chat`` → display AI reply directly
+           - ``needs_clarification`` → show clarification message
+           - Task (other) → show ``ConfirmCard`` inline
+        5. Hide typing indicator
+        """
+        # 1. Echo user message
+        self._add_bubble("user", text)
+        self.conv.add_user_message(text)
+
+        # 2. Show typing
+        self._set_processing(True)
+
+        # 3. Run inference (use QTimer to keep UI responsive)
+        self._run_inference(text)
+
+    def _run_inference(self, text: str) -> None:
+        """Call the inference engine and dispatch the result."""
         try:
-            result = self.engine.infer(text, user_chrome_connected=self._chrome_connected)
+            result: TaskResult = self.engine.infer(
+                text,
+                user_chrome_connected=self._chrome_connected,
+            )
         except Exception:
-            self._show_typing(False)
-            self._add_ai_message("抱歉，处理请求时出错，请重试。")
+            logger.exception("Inference failed for input: %r", text[:100])
+            self._set_processing(False)
+            self._add_bubble("assistant", "抱歉，处理您的请求时出现错误，请重试。")
+            self.conv.add_assistant_message("抱歉，处理您的请求时出现错误，请重试。")
             return
 
-        self._show_typing(False)
+        # 4. Turn off typing indicator
+        self._set_processing(False)
 
-        if result.task_type == "general_chat":
-            reply = result.clarification_question or result.raw_response or "收到。"
-            self._add_ai_message(reply)
-        elif result.needs_clarification:
-            q = result.clarification_question or "请进一步描述。"
-            self._add_ai_message(q)
+        # 5. Route by result type
+        if result.needs_clarification:
+            question = result.clarification_question or "请进一步描述你的需求。"
+            self._add_bubble("assistant", question)
+            self.conv.add_assistant_message(question)
+
+        elif result.task_type == "general_chat":
+            reply = result.clarification_question or result.raw_response or "收到您的消息。"
+            self._add_bubble("assistant", reply)
+            self.conv.add_assistant_message(reply)
+
         else:
+            # Task → show confirm card
             self._show_confirm_card(result)
 
-    def _add_user_message(self, text: str) -> None:
-        msg = MessageWidget("user", self._msg_container)
-        msg.set_text(text)
+    # ------------------------------------------------------------------
+    # Confirm card
+    # ------------------------------------------------------------------
 
-        wrapper = QWidget(self._msg_container)
-        wl = QHBoxLayout(wrapper)
-        wl.setContentsMargins(0, 0, 0, 0)
-        wl.addStretch()
-        msg.setMaximumWidth(int(self.chat_area.width() * 0.75))
-        msg.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
-        wl.addWidget(msg)
-        self._insert_msg(wrapper)
-
-        msg.play_slide_in(from_right=True)
-
-    def _add_ai_message(self, text: str) -> None:
-        msg = MessageWidget("assistant", self._msg_container)
-
-        wrapper = QWidget(self._msg_container)
-        wl = QHBoxLayout(wrapper)
-        wl.setContentsMargins(0, 0, 0, 0)
-        msg.setMaximumWidth(int(self.chat_area.width() * 0.85))
-        wl.addWidget(msg)
-        wl.addStretch()
-        self._insert_msg(wrapper)
-
-        msg.set_text("")
-        msg.play_slide_in(from_right=False)
-
-        idx = len(self._msg_widgets)
-        self._msg_widgets.append(msg)
-
-        # Typewriter
-        self._typewriter = TypewriterThread(text, idx, self)
-        self._typewriter.char_written.connect(self._on_char_written)
-        self._typewriter.start()
-
-    def _on_char_written(self, idx: int, partial: str) -> None:
-        if idx < len(self._msg_widgets):
-            self._msg_widgets[idx].set_text(partial)
-            self._scroll_to_bottom()
-
-    def _show_typing(self, show: bool) -> None:
-        self._typing_label.setVisible(show)
-        if show:
-            self._typing_label.setText("● ○ ○")
-            self._typing_dots = 0
-            if not hasattr(self, '_typing_timer'):
-                self._typing_timer = QTimer(self)
-                self._typing_timer.timeout.connect(self._animate_typing)
-            self._typing_timer.start(400)
-        else:
-            if hasattr(self, '_typing_timer'):
-                self._typing_timer.stop()
-            self._typing_label.setText("")
-
-    def _animate_typing(self) -> None:
-        dots = [
-            "● ○ ○", "○ ● ○", "○ ○ ●"
-        ]
-        self._typing_label.setText(dots[self._typing_dots % 3])
-        self._typing_dots = getattr(self, '_typing_dots', 0) + 1
-
-    def _insert_msg(self, widget: QWidget) -> None:
-        count = self._msg_layout.count()
-        self._msg_layout.insertWidget(count - 1, widget)
-        self._scroll_to_bottom()
-
-    def _scroll_to_bottom(self) -> None:
-        QTimer.singleShot(30, lambda: (
-            self._scroll.verticalScrollBar().setValue(
-                self._scroll.verticalScrollBar().maximum()
-            )
-        ))
-
-    # ── Confirm card ────────────────────────────────────────────
     def _show_confirm_card(self, task: TaskResult) -> None:
+        """Create a ``ConfirmCard``, wire signals, and embed in chat."""
         self._current_task = task
+
         card = ConfirmCard()
-        card.confirmed.connect(lambda p: self._handle_execute(card, p))
-        card.cancelled.connect(lambda: self._on_cancelled(card))
+        card.confirmed.connect(lambda params: self._handle_execute(card, params))
+        card.cancelled.connect(lambda: self._on_task_cancelled(card))
+        card.modified.connect(lambda params: self._handle_execute(card, params))
+
         card.show_task(task)
-        self._insert_msg(card)
-        self.results.set_result(f"任务: {task.task_type}\n系统: {task.system_name}")
+        self._add_widget(card)
+
+    # ------------------------------------------------------------------
+    # Execute task
+    # ------------------------------------------------------------------
 
     def _handle_execute(self, card: ConfirmCard, adjusted_params: dict) -> None:
-        if not self._current_task:
+        """Execute a confirmed task, streaming progress into the card."""
+        if self._current_task is None:
             return
+
         self._current_task.params.update(adjusted_params)
-
-        card.show_progress("执行中...", 0.0)
-        result = self.executor.execute(
-            self._current_task, on_progress=card.show_progress
-        )
-        card.show_result(result)
-        self.conv.add_assistant_message(result.message)
-
-        # Save memory
         task = self._current_task
-        files_used = []
+
+        card.show_progress("正在准备执行...", 0.0)
+
+        try:
+            exec_result: ExecutionResult = self.executor.execute(
+                task,
+                on_progress=card.show_progress,
+            )
+        except Exception:
+            logger.exception("Execution failed")
+            exec_result = ExecutionResult(
+                success=False,
+                message="执行过程中发生异常",
+            )
+
+        # Show result in the card
+        card.show_result(exec_result)
+
+        # Record to memory
+        user_input = getattr(task, 'user_input', '') or ''
+        files_used: list[str] = []
         if task.params.get("data_source"):
-            files_used.append(task.params["data_source"])
+            files_used.append(str(task.params["data_source"]))
+        if task.params.get("filepath"):
+            files_used.append(str(task.params["filepath"]))
+        if task.params.get("directory"):
+            files_used.append(str(task.params["directory"]))
+
         self.memory.record_task(
-            user_input=getattr(task, 'user_input', '') or '',
+            user_input=user_input,
             task_type=task.task_type,
             system_name=task.system_name,
             params=task.params,
             files_used=files_used,
         )
-        self.results.set_result(f"完成: {result.message}")
+        self.conv.add_assistant_message(
+            f"任务完成：{exec_result.message}"
+        )
 
-    def _on_cancelled(self, card: ConfirmCard) -> None:
+        self._add_bubble(
+            "system",
+            f"{'[OK]' if exec_result.success else '[X]'} {exec_result.message}"
+        )
+
+    def _on_task_cancelled(self, card: ConfirmCard) -> None:
+        """Handle user cancelling a task confirmation."""
         card.clear()
+        self._add_bubble("system", "已取消任务。")
         self._current_task = None
 
-    # ── Panel visibility ────────────────────────────────────────
+    # ------------------------------------------------------------------
+    # Chat display helpers
+    # ------------------------------------------------------------------
+
+    def _add_bubble(self, role: str, content: str) -> None:
+        """Add a message bubble with slide+fade animation."""
+        bubble = _MessageBubble(role, content, parent=self._msg_container)
+
+        if role in ("user", "assistant"):
+            wrapper = QWidget(self._msg_container)
+            wrapper_layout = QHBoxLayout(wrapper)
+            wrapper_layout.setContentsMargins(0, 0, 0, 0)
+
+            bubble.setMaximumWidth(int(self.width() * 0.8))
+            bubble.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+
+            if role == "user":
+                wrapper_layout.addStretch()
+                wrapper_layout.addWidget(bubble)
+            else:
+                wrapper_layout.addWidget(bubble)
+                wrapper_layout.addStretch()
+
+            # Fade-in effect
+            opacity_effect = QGraphicsOpacityEffect(bubble)
+            opacity_effect.setOpacity(0.0)
+            bubble.setGraphicsEffect(opacity_effect)
+
+            fade = QPropertyAnimation(opacity_effect, b"opacity")
+            fade.setDuration(_MSG_SLIDE_MS)
+            fade.setStartValue(0.0)
+            fade.setEndValue(1.0)
+            fade.setEasingCurve(QEasingCurve.OutCubic)
+
+            # Slide from right (user) or left (assistant)
+            slide = QPropertyAnimation(bubble, b"pos")
+            slide.setDuration(_MSG_SLIDE_MS)
+            slide.setEasingCurve(QEasingCurve.OutCubic)
+
+            self._insert_before_spacer(wrapper)
+            # Force layout so bubble gets a real position
+            wrapper_layout.activate()
+            target_pos = bubble.pos()
+            if role == "user":
+                slide.setStartValue(QPoint(target_pos.x() + 80, target_pos.y()))
+            else:
+                slide.setStartValue(QPoint(target_pos.x() - 80, target_pos.y()))
+            slide.setEndValue(target_pos)
+
+            group = QParallelAnimationGroup()
+            group.addAnimation(fade)
+            group.addAnimation(slide)
+            group.start()
+            # Store reference to prevent GC
+            bubble._anim_group = group
+
+            # Typewriter effect for AI messages
+            if role == "assistant":
+                bubble._typewriter_full = content
+                bubble._typewriter_pos = 0
+                bubble._label.setText("")
+                bubble._typewriter_timer = QTimer(bubble)
+                bubble._typewriter_timer.timeout.connect(
+                    lambda b=bubble: self._typewriter_step(b)
+                )
+                bubble._typewriter_timer.start(_TYPEWRITER_MS)
+        else:
+            self._insert_before_spacer(bubble)
+
+        self._smooth_scroll_to_bottom()
+
+    def _typewriter_step(self, bubble: _MessageBubble) -> None:
+        """Type one more character on an AI bubble."""
+        full = getattr(bubble, "_typewriter_full", "")
+        pos = getattr(bubble, "_typewriter_pos", 0)
+        if pos < len(full):
+            pos += 1
+            bubble._typewriter_pos = pos
+            bubble._label.setText(full[:pos])
+        else:
+            timer = getattr(bubble, "_typewriter_timer", None)
+            if timer:
+                timer.stop()
+
+    def _add_widget(self, widget: QWidget) -> None:
+        """Embed a custom widget (e.g. ConfirmCard) into the chat flow."""
+        widget.setParent(self._msg_container)
+        self._insert_before_spacer(widget)
+        self._scroll_to_bottom()
+
+    def _insert_before_spacer(self, widget: QWidget) -> None:
+        """Insert a widget just before the bottom spacer in the message layout."""
+        idx = self._msg_layout.count() - 1  # spacer is last
+        self._msg_layout.insertWidget(idx, widget)
+
+    def clear_chat(self) -> None:
+        """Remove all messages from the chat area."""
+        while self._msg_layout.count() > 1:
+            item = self._msg_layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+        self.conv.clear()
+
+    # ------------------------------------------------------------------
+    # Processing state
+    # ------------------------------------------------------------------
+
+    def _set_processing(self, active: bool) -> None:
+        """Toggle the typing indicator and disable input during inference."""
+        if active:
+            self._typing_indicator.start()
+            self._text_edit.setReadOnly(True)
+            self._btn_send.setEnabled(False)
+            self._text_edit.setPlaceholderText("AI 思考中...")
+        else:
+            self._typing_indicator.stop()
+            self._text_edit.setReadOnly(False)
+            self._btn_send.setEnabled(True)
+            self._text_edit.setPlaceholderText("输入你想做的事情...")
+
+    # ------------------------------------------------------------------
+    # Scroll to bottom
+    # ------------------------------------------------------------------
+
+    def _smooth_scroll_to_bottom(self) -> None:
+        """Animate smooth scroll to bottom."""
+        QTimer.singleShot(30, self._animate_scroll)
+
+    def _animate_scroll(self) -> None:
+        scrollbar = self._scroll_area.verticalScrollBar()
+        if scrollbar is None:
+            return
+        target = scrollbar.maximum()
+        if scrollbar.value() == target:
+            return
+        anim = QPropertyAnimation(scrollbar, b"value")
+        anim.setDuration(200)
+        anim.setStartValue(scrollbar.value())
+        anim.setEndValue(target)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.start()
+        self._scroll_anim = anim  # prevent GC
+
+    def _scroll_to_bottom(self) -> None:
+        """Auto-scroll the chat area to the latest message."""
+        QTimer.singleShot(20, self._do_scroll)
+
+    def _do_scroll(self) -> None:
+        scrollbar = self._scroll_area.verticalScrollBar()
+        if scrollbar is not None:
+            scrollbar.setValue(scrollbar.maximum())
+
+    # ------------------------------------------------------------------
+    # Slide animation -- show / hide
+    # ------------------------------------------------------------------
+
+    def show_panel(self) -> None:
+        """Animate the panel sliding in from the left edge."""
+        if self._is_sliding:
+            return
+        self._is_sliding = True
+
+        self.setVisible(True)
+        start_x = -self.width()
+        end_x = self._target_x
+
+        self.move(start_x, self.y())
+
+        self._slide_anim = QPropertyAnimation(self, b"pos")
+        self._slide_anim.setDuration(_SLIDE_DURATION_MS)
+        self._slide_anim.setStartValue(QPoint(start_x, self.y()))
+        self._slide_anim.setEndValue(QPoint(end_x, self.y()))
+        self._slide_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._slide_anim.finished.connect(self._on_slide_in_finished)
+        self._slide_anim.start()
+
+    def hide_panel(self) -> None:
+        """Animate the panel sliding out to the left, then hide."""
+        if self._is_sliding:
+            return
+        self._is_sliding = True
+
+        start_x = self.x()
+        end_x = -self.width()
+
+        self._slide_anim = QPropertyAnimation(self, b"pos")
+        self._slide_anim.setDuration(_SLIDE_DURATION_MS)
+        self._slide_anim.setStartValue(QPoint(start_x, self.y()))
+        self._slide_anim.setEndValue(QPoint(end_x, self.y()))
+        self._slide_anim.setEasingCurve(QEasingCurve.InCubic)
+        self._slide_anim.finished.connect(self._on_slide_out_finished)
+        self._slide_anim.start()
+
     def toggle(self) -> None:
+        """Toggle panel visibility (called from capsule click)."""
         if self.isVisible() and not self._is_sliding:
             self.hide_panel()
         elif not self.isVisible():
             self.show_panel()
 
-    def show_panel(self) -> None:
-        if self._is_sliding:
-            return
-        self._is_sliding = True
-        self.setVisible(True)
-        self._slide_anim = QPropertyAnimation(self, b"pos")
-        self._slide_anim.setDuration(300)
-        self._slide_anim.setStartValue(QPoint(-self.width(), self.y()))
-        self._slide_anim.setEndValue(QPoint(self._target_x, self.y()))
-        self._slide_anim.setEasingCurve(QEasingCurve.OutCubic)
-        self._slide_anim.finished.connect(lambda: setattr(self, '_is_sliding', False))
-        self._slide_anim.start()
-
-    def hide_panel(self) -> None:
-        if self._is_sliding:
-            return
-        self._is_sliding = True
-        self._slide_anim = QPropertyAnimation(self, b"pos")
-        self._slide_anim.setDuration(300)
-        self._slide_anim.setStartValue(self.pos())
-        self._slide_anim.setEndValue(QPoint(-self.width(), self.y()))
-        self._slide_anim.setEasingCurve(QEasingCurve.InCubic)
-        self._slide_anim.finished.connect(self._on_hide_done)
-        self._slide_anim.start()
-
-    def _on_hide_done(self) -> None:
+    def _on_slide_in_finished(self) -> None:
+        """Cleanup after slide-in completes."""
         self._is_sliding = False
+        self._slide_anim = None
+
+    def _on_slide_out_finished(self) -> None:
+        """Cleanup after slide-out completes."""
+        self._is_sliding = False
+        self._slide_anim = None
         self.setVisible(False)
         self._hide_offscreen()
         self.panel_closed.emit()
 
-    def show_settings(self) -> None:
-        self.settings_requested.emit()
+    # ------------------------------------------------------------------
+    # Window event overrides
+    # ------------------------------------------------------------------
 
-    def check_ollama(self) -> bool:
-        available = self.engine.check_ollama_available()
-        status = "已连接 AI 服务 ✅" if available else "⚠️ 未连接 AI 服务"
-        self.results.set_result(status)
-        return available
+    def showEvent(self, event) -> None:
+        """Override to support direct show() with animation."""
+        # When shown via the framework (not show_panel), still animate in.
+        # But we ignore this because show_panel() handles animation explicitly.
+        super().showEvent(event)
+
+    def closeEvent(self, event) -> None:
+        """Close hides the panel; does NOT quit the application."""
+        event.ignore()
+        self.hide_panel()
+
+    # ------------------------------------------------------------------
+    # Mouse drag support -- drag the title bar to reposition
+    # ------------------------------------------------------------------
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """Record the drag origin when pressing the title bar area."""
+        if event.button() == Qt.LeftButton:
+            local = self.centralWidget().mapFrom(self, event.pos())
+            title_rect = self._title_bar.geometry()
+            if title_rect.contains(local):
+                self._drag_origin = event.globalPosition().toPoint()
+                self._drag_active = True
+                return
+        self._drag_active = False
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        """Drag the panel if the title bar is being dragged."""
+        if getattr(self, '_drag_active', False):
+            delta = event.globalPosition().toPoint() - self._drag_origin
+            self.move(self.pos() + delta)
+            self._drag_origin = event.globalPosition().toPoint()
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        """End the drag."""
+        self._drag_active = False
+        super().mouseReleaseEvent(event)
+
+    # ------------------------------------------------------------------
+    # Public helpers
+    # ------------------------------------------------------------------
 
     def set_chrome_connected(self, connected: bool) -> None:
+        """Update the Chrome debugging connection state for the inference engine."""
         self._chrome_connected = connected
+        logger.debug("Chrome connected state set to: %s", connected)
+
+    def check_ollama(self) -> bool:
+        """Check if the Ollama API is reachable; add a system message with status."""
+        available = self.engine.check_ollama_available()
+        if available:
+            self._add_bubble("system", "已连接 AI 服务，随时可以开始对话。")
+        else:
+            self._add_bubble(
+                "system",
+                "未连接到 AI 服务\n\n"
+                "请确认 API 配置正确：\n"
+                "1. 点击标题栏齿轮按钮 → 设置\n"
+                "2. 或编辑项目目录的 .env 文件\n\n"
+                "配置完成后重启应用。"
+            )
+        return available
 
     def focus_input(self) -> None:
-        self._input.setFocus()
+        """Set keyboard focus to the chat input field."""
+        self._text_edit.setFocus()
 
-    def _add_system_message(self, text: str) -> None:
-        lbl = QLabel(text)
-        lbl.setAlignment(Qt.AlignCenter)
-        lbl.setStyleSheet(
-            f"color: {_CLR_TEXT_MUTED}; font-size: 12px; background: transparent;"
-            f"font-family: {FONT_FAMILY}; padding: 6px 0;"
-        )
-        self._insert_msg(lbl)
+
+# ---------------------------------------------------------------------------
+# Standalone test entry point
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import sys
+
+    logging.basicConfig(level=logging.DEBUG)
+
+    app = QApplication(sys.argv)
+    app.setApplicationName("AI 办公助手 - SidePanel Test")
+
+    cfg = AppConfig()
+    mem = MemoryStore(db_path="data/test_sidepanel.db")
+
+    panel = SidePanel(cfg, mem)
+    panel.check_ollama()
+    panel.show_panel()
+
+    sys.exit(app.exec())
