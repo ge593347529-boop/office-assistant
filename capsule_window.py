@@ -256,12 +256,18 @@ class CapsuleWindow(QMainWindow):
         self.snap_to_half_hidden()
 
     def _animate_slide_out(self) -> None:
-        """滑出动画：胶囊从半隐藏位置滑到完全可见。"""
+        """滑出动画：胶囊滑到鼠标下方，保证鼠标在胶囊内。"""
+        from PySide6.QtGui import QCursor
         screen = QApplication.screenAt(self.pos()) or QApplication.primaryScreen()
         if screen is None:
             return
         geom = screen.availableGeometry()
-        target_x = geom.left() + 4  # 4px from edge keeps mouse inside widget
+        mouse_x = QCursor.pos().x()
+        # Target: full visible (left edge at screen edge), but keep mouse inside
+        target_x = geom.left()
+        if mouse_x < target_x + 6:
+            target_x = mouse_x - 2  # keep mouse inside capsule
+        target_x = max(geom.left(), target_x)
         target_y = self.pos().y()
         target = QPoint(target_x, target_y)
 
