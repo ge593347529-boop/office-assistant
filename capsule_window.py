@@ -48,10 +48,12 @@ logger = logging.getLogger(__name__)
 # 常量
 # ---------------------------------------------------------------------------
 
-CAPSULE_SIZE = 48          # 胶囊直径 (px)
+CAPSULE_SIZE = 56          # 控件尺寸 (px)，含透明边距
+CIRCLE_SIZE = 48           # 视觉圆形直径 (px)
+CIRCLE_MARGIN = 4          # 圆形左侧透明边距 (px)
 SNAP_DURATION = 220        # 吸附动画时长 (ms)
 IDLE_TIMEOUT = 5_000       # 空闲超时 (ms) — 5 秒
-CLICK_THRESHOLD = 3        # 点击判定阈值 (px) — 移动小于此值视为单击
+CLICK_THRESHOLD = 3        # 点击判定阈值 (px)
 DIM_OPACITY = 0.5          # 变暗时的透明度
 
 
@@ -145,34 +147,35 @@ class CapsuleWindow(QMainWindow):
     # ═══════════════════════════════════════════════════════════════
 
     def paintEvent(self, event) -> None:
-        """绘制绿色渐变圆形胶囊 + 白色 "AI" 文字。"""
+        """绘制绿色渐变圆形胶囊 + 白色 AI 文字。圆形靠右，左侧透明边距扩展 hitbox。"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
 
         opacity = 0.5 if self.auto_hidden else 1.0
         painter.setOpacity(opacity)
 
-        w = self.width()
-        h = self.height()
-        margin = 1
-        rect = QRectF(margin, margin, w - 2 * margin, h - 2 * margin)
+        w, h = self.width(), self.height()
+        # 圆形靠右绘制，左边留 CIRCLE_MARGIN 透明间距
+        cx = w - CIRCLE_SIZE - CIRCLE_MARGIN
+        cy = (h - CIRCLE_SIZE) // 2
+        rect = QRectF(cx, cy, CIRCLE_SIZE, CIRCLE_SIZE)
 
-        # 绿色渐变（#3fb950 → #238636）
-        gradient = QLinearGradient(0, 0, 0, h)
+        # 绿色渐变
+        gradient = QLinearGradient(0, cy, 0, cy + CIRCLE_SIZE)
         gradient.setColorAt(0.0, QColor("#3fb950"))
         gradient.setColorAt(1.0, QColor("#238636"))
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(gradient))
         painter.drawEllipse(rect)
 
-        # 白色 "AI" 文字（带轻微阴影）
+        # 白色 AI 文字
         shadow = QColor(0, 0, 0, 60)
         painter.setPen(QPen(shadow))
         font = QFont("Microsoft YaHei", 15, QFont.Bold)
         painter.setFont(font)
-        painter.drawText(QRectF(1, 1, w, h), Qt.AlignCenter, "AI")
+        painter.drawText(rect.adjusted(1, 1, 0, 0), Qt.AlignCenter, "AI")
         painter.setPen(QPen(QColor("#FFFFFF")))
-        painter.drawText(QRectF(0, 0, w, h), Qt.AlignCenter, "AI")
+        painter.drawText(rect, Qt.AlignCenter, "AI")
 
         painter.end()
 
@@ -262,10 +265,10 @@ class CapsuleWindow(QMainWindow):
             return
         geom = screen.availableGeometry()
         mouse_x = QCursor.pos().x()
-        # Target: full visible (left edge at screen edge), but keep mouse inside
+        # Target: flush with screen edge, circle padding absorbs edge gap
         target_x = geom.left()
-        if mouse_x < target_x + 6:
-            target_x = mouse_x - 2  # keep mouse inside capsule
+        if mouse_x < target_x + 8:
+            target_x = mouse_x - 4  # transparent padding keeps mouse inside
         target_x = max(geom.left(), target_x)
         target_y = self.pos().y()
         target = QPoint(target_x, target_y)
@@ -294,7 +297,8 @@ class CapsuleWindow(QMainWindow):
             return
 
         geom = screen.availableGeometry()
-        target_x = geom.left() - CAPSULE_SIZE // 2
+        # Half hidden: show right half of the circle only
+        target_x = geom.left() - CIRCLE_MARGIN - CIRCLE_SIZE // 2
         target_y = geom.center().y() - CAPSULE_SIZE // 2
         target = QPoint(target_x, target_y)
 
