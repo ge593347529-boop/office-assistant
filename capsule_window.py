@@ -254,7 +254,7 @@ class CapsuleWindow(QMainWindow):
         if screen is None:
             return
         geom = screen.availableGeometry()
-        target_x = geom.left() + 1  # 1px from edge keeps mouse inside widget
+        target_x = geom.left() + 4  # 4px from edge keeps mouse inside widget
         target_y = self.pos().y()
         target = QPoint(target_x, target_y)
 
