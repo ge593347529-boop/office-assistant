@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_PANEL_WIDTH_RATIO = 0.25        # 25 % of screen width
+_PANEL_WIDTH_RATIO = 0.40        # 40 % of screen width
 _PANEL_ASPECT = 2.0 / 1.5        # width:height = 2:1.5, so height = width / aspect
 _LEFT_MARGIN_RATIO = 0.01        # 1 % margin from left edge
 _SLIDE_DURATION_MS = 300         # slide animation duration
@@ -160,21 +160,25 @@ class _MessageBubble(QFrame):
                 bg="transparent",
                 border="none",
                 radius="0px",
-                padding="4px 8px",
+                padding="8px 16px",
             ))
+            self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             align = Qt.AlignCenter
             self._label.setStyleSheet(
-                "color: #999999; font-size: 12px; background: transparent; border: none;"
+                "color: #888; font-size: 12px; background: transparent; border: none;"
             )
+            self._label.setAlignment(Qt.AlignCenter)
+            self._label.setWordWrap(True)
             self._time_label.setStyleSheet(
                 "color: #ccc; font-size: 10px; background: transparent;"
             )
+            self._time_label.setVisible(False)
 
         self._label.setAlignment(align | Qt.AlignVCenter)
         self._time_label.setAlignment(align)
-        # Adaptive sizing — bubble shrinks to content
-        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
-        self._label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        if self._role != "system":
+            self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+            self._label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
 
     @staticmethod
     def _bubble_qss(
