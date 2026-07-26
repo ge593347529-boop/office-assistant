@@ -109,7 +109,8 @@ class CapsuleWindow(QMainWindow):
         # ── 状态 ──────────────────────────────────────────────────
         self.auto_hidden = True          # 初始为变暗状态
         self._hover_expanded = False     # 是否已滑出
-        self._leave_timer: QTimer | None = None  # 离开防抖
+        self._hover_watch_timer: QTimer | None = None  # 悬停检测
+        self._hover_gone_count = 0       # 连续不在胶囊上的次数
         self._drag_pos: QPoint | None = None
         self._press_pos: QPoint | None = None
         self._side_panel = None          # SidePanel 引用（可选）
@@ -219,34 +220,39 @@ class CapsuleWindow(QMainWindow):
         super().mouseReleaseEvent(event)
 
     def enterEvent(self, event: QEnterEvent) -> None:
-        """鼠标进入 → 取消离开防抖 + 滑出 + 变亮 + 重置计时器。"""
-        # Cancel pending retreat
-        if self._leave_timer is not None:
-            self._leave_timer.stop()
-            self._leave_timer = None
+        """鼠标进入 → 变亮 + 重置计时器 + 启动悬停检测。"""
         if self.auto_hidden:
             self.auto_hidden = False
             self.update()
         if not self._hover_expanded:
             self._animate_slide_out()
             self._hover_expanded = True
+            self._start_hover_watch()
         self._reset_idle()
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        """鼠标离开 → 延迟缩回半隐藏。"""
-        if self._leave_timer is None:
-            self._leave_timer = QTimer(self)
-            self._leave_timer.setSingleShot(True)
-            self._leave_timer.timeout.connect(self._on_leave_debounced)
-        self._leave_timer.start(80)
+        """不处理——改用 _hover_watch 定时器轮询 underMouse()。"""
         super().leaveEvent(event)
 
-    def _on_leave_debounced(self) -> None:
-        """防抖触发：真正缩回半隐藏。"""
-        self._hover_expanded = False
-        self._leave_timer = None
-        self.snap_to_half_hidden()
+    def _start_hover_watch(self) -> None:
+        """启动悬停检测定时器：每 150ms 检测鼠标是否还在胶囊上。"""
+        if self._hover_watch_timer is None:
+            self._hover_watch_timer = QTimer(self)
+            self._hover_watch_timer.timeout.connect(self._check_hover)
+        self._hover_gone_count = 0
+        self._hover_watch_timer.start(150)
+
+    def _check_hover(self) -> None:
+        """检测鼠标是否已离开胶囊。"""
+        if self.underMouse():
+            self._hover_gone_count = 0
+        else:
+            self._hover_gone_count += 1
+            if self._hover_gone_count >= 2:  # 300ms 确认离开
+                self._hover_watch_timer.stop()
+                self._hover_expanded = False
+                self.snap_to_half_hidden()
 
     def _animate_slide_out(self) -> None:
         """滑出动画：胶囊滑到鼠标下方，保证鼠标在胶囊内。"""
