@@ -58,15 +58,17 @@ _INPUT_MIN_HEIGHT = 38
 
 # Codex dark color palette
 _CLR_BG = "#0d1117"
-_CLR_BG_GLASS = "rgba(13, 17, 23, 0.95)"
+_CLR_BG_GLASS = "rgba(18, 22, 28, 0.92)"
 _CLR_SURFACE = "#161b22"
-_CLR_BORDER = "#30363d"
-_CLR_BORDER_LIGHT = "#21262d"
-_CLR_TEXT_PRIMARY = "#c9d1d9"
+_CLR_BORDER = "rgba(255, 255, 255, 0.12)"
+_CLR_BORDER_LIGHT = "rgba(255, 255, 255, 0.06)"
+_CLR_TEXT_PRIMARY = "#e6edf3"
 _CLR_TEXT_SECONDARY = "#8b949e"
 _CLR_TEXT_MUTED = "#484f58"
 _CLR_USER_BUBBLE = "#1f6feb"
 _CLR_USER_BUBBLE_BORDER = "#388bfd"
+_CLR_ASSISTANT_BUBBLE = "rgba(255, 255, 255, 0.06)"
+_CLR_ASSISTANT_BORDER = "rgba(255, 255, 255, 0.1)"
 _CLR_BTN_SEND = "#238636"
 _CLR_BTN_SEND_HOVER = "#2ea043"
 _CLR_BTN_SEND_PRESSED = "#196c2e"
@@ -137,8 +139,8 @@ class _MessageBubble(QFrame):
             )
         elif self._role == "assistant":
             self.setStyleSheet(self._bubble_qss(
-                bg=_CLR_SURFACE,
-                border=_CLR_BORDER_LIGHT,
+                bg=_CLR_ASSISTANT_BUBBLE,
+                border=_CLR_ASSISTANT_BORDER,
                 radius="12px 12px 12px 4px",
             ))
             align = Qt.AlignLeft
@@ -472,13 +474,14 @@ class SidePanel(QMainWindow):
                 background-color: {_CLR_BG_GLASS};
                 border: 1px solid {_CLR_BORDER};
                 border-left: none;
-                border-radius: 0 12px 12px 0;
+                border-radius: 0 16px 16px 0;
             }}
 
             #TitleBar {{
-                background-color: {_CLR_SURFACE};
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                    stop:0 rgba(255,255,255,0.03), stop:1 rgba(255,255,255,0.06));
                 border-bottom: 1px solid {_CLR_BORDER_LIGHT};
-                border-radius: 0 12px 0 0;
+                border-radius: 0 16px 0 0;
             }}
 
             #TitleLabel {{
@@ -565,17 +568,18 @@ class SidePanel(QMainWindow):
             }}
 
             QScrollBar:vertical {{
-                background: transparent;
-                width: 6px;
-                margin: 0;
+                background: rgba(255,255,255,0.02);
+                width: 5px;
+                margin: 4px 2px;
+                border-radius: 3px;
             }}
             QScrollBar::handle:vertical {{
-                background: {_CLR_BORDER};
+                background: rgba(255,255,255,0.15);
                 border-radius: 3px;
                 min-height: 30px;
             }}
             QScrollBar::handle:vertical:hover {{
-                background: {_CLR_TEXT_MUTED};
+                background: rgba(255,255,255,0.25);
             }}
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical {{

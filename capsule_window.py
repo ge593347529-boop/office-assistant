@@ -32,7 +32,9 @@ from PySide6.QtGui import (
     QMouseEvent,
     QAction,
     QEnterEvent,
+    QLinearGradient,
 )
+from PySide6.QtCore import QRectF
 from PySide6.QtWidgets import (
     QMainWindow,
     QSystemTrayIcon,
@@ -140,31 +142,34 @@ class CapsuleWindow(QMainWindow):
     # ═══════════════════════════════════════════════════════════════
 
     def paintEvent(self, event) -> None:
-        """绘制绿色圆形胶囊 + 白色 "AI" 文字。
-
-        auto_hidden 状态下整体透明度降低 50%。
-        """
+        """绘制绿色渐变圆形胶囊 + 白色 "AI" 文字。"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
 
-        # 根据状态调整透明度
-        opacity = DIM_OPACITY if self.auto_hidden else 1.0
+        opacity = 0.5 if self.auto_hidden else 1.0
         painter.setOpacity(opacity)
 
         w = self.width()
         h = self.height()
-        margin = 2
+        margin = 1
+        rect = QRectF(margin, margin, w - 2 * margin, h - 2 * margin)
 
-        # 胶囊圆形（绿色）
-        painter.setPen(QPen(QColor("#238636"), 0))
-        painter.setBrush(QBrush(QColor("#238636")))
-        painter.drawEllipse(margin, margin, w - 2 * margin, h - 2 * margin)
+        # 绿色渐变（#3fb950 → #238636）
+        gradient = QLinearGradient(0, 0, 0, h)
+        gradient.setColorAt(0.0, QColor("#3fb950"))
+        gradient.setColorAt(1.0, QColor("#238636"))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(gradient))
+        painter.drawEllipse(rect)
 
-        # 白色 "AI" 文字
-        painter.setPen(QPen(QColor("#FFFFFF")))
-        font = QFont("Microsoft YaHei", 16, QFont.Bold)
+        # 白色 "AI" 文字（带轻微阴影）
+        shadow = QColor(0, 0, 0, 60)
+        painter.setPen(QPen(shadow))
+        font = QFont("Microsoft YaHei", 15, QFont.Bold)
         painter.setFont(font)
-        painter.drawText(QRect(0, 0, w, h), Qt.AlignCenter, "AI")
+        painter.drawText(QRectF(1, 1, w, h), Qt.AlignCenter, "AI")
+        painter.setPen(QPen(QColor("#FFFFFF")))
+        painter.drawText(QRectF(0, 0, w, h), Qt.AlignCenter, "AI")
 
         painter.end()
 
