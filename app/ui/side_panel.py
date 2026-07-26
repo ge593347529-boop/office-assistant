@@ -57,22 +57,22 @@ _INPUT_MAX_HEIGHT = 120
 _INPUT_MIN_HEIGHT = 38
 
 # Codex dark color palette
-_CLR_BG = "#0d1117"
-_CLR_BG_GLASS = "rgba(18, 22, 28, 0.92)"
-_CLR_SURFACE = "#161b22"
-_CLR_BORDER = "rgba(255, 255, 255, 0.12)"
-_CLR_BORDER_LIGHT = "rgba(255, 255, 255, 0.06)"
-_CLR_TEXT_PRIMARY = "#e6edf3"
-_CLR_TEXT_SECONDARY = "#8b949e"
-_CLR_TEXT_MUTED = "#484f58"
-_CLR_USER_BUBBLE = "#1f6feb"
-_CLR_USER_BUBBLE_BORDER = "#388bfd"
-_CLR_ASSISTANT_BUBBLE = "rgba(255, 255, 255, 0.06)"
-_CLR_ASSISTANT_BORDER = "rgba(255, 255, 255, 0.1)"
+_CLR_BG = "#f0f0f0"
+_CLR_BG_GLASS = "rgba(255, 255, 255, 0.88)"
+_CLR_SURFACE = "#ffffff"
+_CLR_BORDER = "rgba(0, 0, 0, 0.12)"
+_CLR_BORDER_LIGHT = "rgba(0, 0, 0, 0.06)"
+_CLR_TEXT_PRIMARY = "#1a1a2e"
+_CLR_TEXT_SECONDARY = "#666666"
+_CLR_TEXT_MUTED = "#999999"
+_CLR_USER_BUBBLE = "rgba(31, 111, 235, 0.12)"
+_CLR_USER_BUBBLE_BORDER = "rgba(31, 111, 235, 0.25)"
+_CLR_ASSISTANT_BUBBLE = "rgba(0, 0, 0, 0.04)"
+_CLR_ASSISTANT_BORDER = "rgba(0, 0, 0, 0.08)"
 _CLR_BTN_SEND = "#238636"
 _CLR_BTN_SEND_HOVER = "#2ea043"
 _CLR_BTN_SEND_PRESSED = "#196c2e"
-_CLR_ACCENT = "#58a6ff"
+_CLR_ACCENT = "#238636"
 
 
 # ---------------------------------------------------------------------------
@@ -132,10 +132,10 @@ class _MessageBubble(QFrame):
             ))
             align = Qt.AlignRight
             self._label.setStyleSheet(
-                "color: #ffffff; font-size: 14px; background: transparent; border: none;"
+                "color: #1a1a2e; font-size: 14px; background: transparent; border: none;"
             )
             self._time_label.setStyleSheet(
-                "color: rgba(255,255,255,0.5); font-size: 10px; background: transparent;"
+                "color: rgba(0,0,0,0.35); font-size: 10px; background: transparent;"
             )
         elif self._role == "assistant":
             self.setStyleSheet(self._bubble_qss(
@@ -145,10 +145,10 @@ class _MessageBubble(QFrame):
             ))
             align = Qt.AlignLeft
             self._label.setStyleSheet(
-                "color: #c9d1d9; font-size: 14px; background: transparent; border: none;"
+                "color: #1a1a2e; font-size: 14px; background: transparent; border: none;"
             )
             self._time_label.setStyleSheet(
-                "color: #484f58; font-size: 10px; background: transparent;"
+                "color: rgba(0,0,0,0.3); font-size: 10px; background: transparent;"
             )
         else:  # system
             self.setStyleSheet(self._bubble_qss(
@@ -159,7 +159,7 @@ class _MessageBubble(QFrame):
             ))
             align = Qt.AlignCenter
             self._label.setStyleSheet(
-                "color: #484f58; font-size: 12px; background: transparent; border: none;"
+                "color: #999999; font-size: 12px; background: transparent; border: none;"
             )
             self._time_label.setStyleSheet(
                 "color: #30363d; font-size: 10px; background: transparent;"
