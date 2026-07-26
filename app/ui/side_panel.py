@@ -310,7 +310,6 @@ class SidePanel(QMainWindow):
         """Configure frameless, semi-transparent window geometry."""
         self.setWindowFlags(
             Qt.FramelessWindowHint
-            | Qt.WindowStaysOnTopHint
             | Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
