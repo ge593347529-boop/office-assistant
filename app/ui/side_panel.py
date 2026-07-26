@@ -137,7 +137,7 @@ class _MessageBubble(QFrame):
             ))
             align = Qt.AlignRight
             self._label.setStyleSheet(
-                "color: #1a1a2e; font-size: 13px; font-family: "Microsoft YaHei"; background: transparent; border: none;"
+                "color: #1a1a2e; font-size: 13px; background: transparent; border: none;"
             )
             self._time_label.setStyleSheet(
                 "color: rgba(0,0,0,0.3); font-size: 9px; background: transparent;"
@@ -150,7 +150,7 @@ class _MessageBubble(QFrame):
             ))
             align = Qt.AlignLeft
             self._label.setStyleSheet(
-                "color: #1a1a2e; font-size: 13px; font-family: "Microsoft YaHei"; background: transparent; border: none;"
+                "color: #1a1a2e; font-size: 13px; background: transparent; border: none;"
             )
             self._time_label.setStyleSheet(
                 "color: rgba(0,0,0,0.3); font-size: 9px; background: transparent;"
@@ -502,7 +502,7 @@ class SidePanel(QMainWindow):
 
             #TitleLabel {{
                 color: {_CLR_TEXT_PRIMARY};
-                font-size: 13px; font-family: "Microsoft YaHei";
+                font-size: 13px;
                 font-weight: 600;
                 background: transparent;
                 border: none;
@@ -540,7 +540,7 @@ class SidePanel(QMainWindow):
             }}
             #TypingLabel {{
                 color: {_CLR_TEXT_SECONDARY};
-                font-size: 13px; font-family: "Microsoft YaHei";
+                font-size: 13px;
                 background: transparent;
                 border: none;
             }}
@@ -571,7 +571,7 @@ class SidePanel(QMainWindow):
                 color: #ffffff;
                 border: none;
                 border-radius: 6px;
-                font-size: 13px; font-family: "Microsoft YaHei";
+                font-size: 13px;
                 font-weight: 600;
                 padding: 0 14px;
             }}
@@ -818,7 +818,7 @@ class SidePanel(QMainWindow):
             text_label = QLabel(content)
             text_label.setWordWrap(True)
             text_label.setTextFormat(Qt.PlainText)
-            text_label.setStyleSheet("color: #1a1a2e; font-size: 13px; font-family: "Microsoft YaHei"; background: transparent; border: none;")
+            text_label.setStyleSheet("color: #1a1a2e; font-size: 13px; background: transparent; border: none;")
             text_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
             text_label.setMaximumWidth(int(self.width() * 0.65))
             row_layout.addWidget(text_label)
