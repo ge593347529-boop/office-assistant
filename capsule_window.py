@@ -239,7 +239,7 @@ class CapsuleWindow(QMainWindow):
             self._leave_timer = QTimer(self)
             self._leave_timer.setSingleShot(True)
             self._leave_timer.timeout.connect(self._on_leave_debounced)
-        self._leave_timer.start(150)
+        self._leave_timer.start(80)
         super().leaveEvent(event)
 
     def _on_leave_debounced(self) -> None:
@@ -254,7 +254,7 @@ class CapsuleWindow(QMainWindow):
         if screen is None:
             return
         geom = screen.availableGeometry()
-        target_x = geom.left()  # fully visible at screen edge
+        target_x = geom.left() + 1  # 1px from edge keeps mouse inside widget
         target_y = self.pos().y()
         target = QPoint(target_x, target_y)
 
