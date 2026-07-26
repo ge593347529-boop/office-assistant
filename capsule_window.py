@@ -249,7 +249,7 @@ class CapsuleWindow(QMainWindow):
         if screen is None:
             return
         geom = screen.availableGeometry()
-        target = QPoint(geom.left(), self.pos().y())
+        target = QPoint(geom.left() + 1, self.pos().y())
 
         anim = QPropertyAnimation(self, b"pos", self)
         anim.setDuration(180)
