@@ -292,6 +292,9 @@ class SidePanel(QMainWindow):
 
         self._current_task: Optional[TaskResult] = None
         self._chrome_connected: bool = False
+        self._slide_anim: Optional[QPropertyAnimation] = None
+        self._is_sliding: bool = False
+        self._target_x: int = 0
 
         self._setup_window()
         self._setup_ui()
@@ -306,13 +309,31 @@ class SidePanel(QMainWindow):
     def _setup_window(self) -> None:
         """Configure frameless, semi-transparent window geometry."""
         self.setWindowFlags(
-            Qt.Window
-            | Qt.WindowMinimizeButtonHint
-            | Qt.WindowMaximizeButtonHint
-            | Qt.WindowCloseButtonHint
+            Qt.FramelessWindowHint
+            | Qt.WindowStaysOnTopHint
+            | Qt.Tool
         )
-        self.setMinimumWidth(380)
-        self.setMinimumHeight(500)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WA_ShowWithoutActivating, False)
+
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            screen_geom = QRect(0, 0, 1920, 1080)
+        else:
+            screen_geom = screen.availableGeometry()
+
+        w = int(screen_geom.width() * _PANEL_WIDTH_RATIO)
+        h = int(w / _PANEL_ASPECT)
+        x = int(screen_geom.width() * _LEFT_MARGIN_RATIO)
+        y = int((screen_geom.height() - h) / 2)
+
+        self._target_x = x
+        self.setGeometry(x, y, w, h)
+        self.setMinimumWidth(280)
+        self.setMinimumHeight(400)
+
+        # Start off-screen for slide-in
+        self._hide_offscreen()
 
     def _hide_offscreen(self) -> None:
         """Move the window off-screen to the left (hidden state)."""
@@ -920,7 +941,8 @@ class SidePanel(QMainWindow):
         else:
             self._typing_indicator.stop()
             self._text_edit.setReadOnly(False)
-            self._btn_send.setEnabled(True)
+            has_text = bool(self._text_edit.toPlainText().strip())
+            self._btn_send.setEnabled(has_text)
             self._text_edit.setPlaceholderText("输入你想做的事情...")
 
     # ------------------------------------------------------------------
@@ -956,15 +978,64 @@ class SidePanel(QMainWindow):
             scrollbar.setValue(scrollbar.maximum())
 
     # ------------------------------------------------------------------
-    # Show / hide
+    # Slide animation -- show / hide
     # ------------------------------------------------------------------
 
+    def show_panel(self) -> None:
+        """Animate the panel sliding in from the left edge."""
+        if self._is_sliding:
+            return
+        self._is_sliding = True
+
+        self.setVisible(True)
+        start_x = -self.width()
+        end_x = self._target_x
+
+        self.move(start_x, self.y())
+
+        self._slide_anim = QPropertyAnimation(self, b"pos")
+        self._slide_anim.setDuration(_SLIDE_DURATION_MS)
+        self._slide_anim.setStartValue(QPoint(start_x, self.y()))
+        self._slide_anim.setEndValue(QPoint(end_x, self.y()))
+        self._slide_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._slide_anim.finished.connect(self._on_slide_in_finished)
+        self._slide_anim.start()
+
+    def hide_panel(self) -> None:
+        """Animate the panel sliding out to the left, then hide."""
+        if self._is_sliding:
+            return
+        self._is_sliding = True
+
+        start_x = self.x()
+        end_x = -self.width()
+
+        self._slide_anim = QPropertyAnimation(self, b"pos")
+        self._slide_anim.setDuration(_SLIDE_DURATION_MS)
+        self._slide_anim.setStartValue(QPoint(start_x, self.y()))
+        self._slide_anim.setEndValue(QPoint(end_x, self.y()))
+        self._slide_anim.setEasingCurve(QEasingCurve.InCubic)
+        self._slide_anim.finished.connect(self._on_slide_out_finished)
+        self._slide_anim.start()
+
     def toggle(self) -> None:
-        """Toggle panel visibility."""
-        if self.isVisible():
-            self.hide()
-        else:
-            self.show()
+        """Toggle panel visibility (called from capsule click)."""
+        if self.isVisible() and not self._is_sliding:
+            self.hide_panel()
+        elif not self.isVisible():
+            self.show_panel()
+
+    def _on_slide_in_finished(self) -> None:
+        """Cleanup after slide-in completes."""
+        self._is_sliding = False
+        self._slide_anim = None
+
+    def _on_slide_out_finished(self) -> None:
+        """Cleanup after slide-out completes."""
+        self._is_sliding = False
+        self._slide_anim = None
+        self.setVisible(False)
+        self._hide_offscreen()
         self.panel_closed.emit()
 
     # ------------------------------------------------------------------

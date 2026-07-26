@@ -48,11 +48,10 @@ logger = logging.getLogger(__name__)
 # 常量
 # ---------------------------------------------------------------------------
 
-CAPSULE_SIZE = 64          # 控件尺寸 (px)，正方形
-CIRCLE_SIZE = 48           # 视觉圆形直径 (px)
+CAPSULE_SIZE = 48          # 胶囊直径 (px)
 SNAP_DURATION = 220        # 吸附动画时长 (ms)
-IDLE_TIMEOUT = 5_000       # 空闲超时 (ms)
-CLICK_THRESHOLD = 3        # 点击判定阈值 (px)
+IDLE_TIMEOUT = 5_000       # 空闲超时 (ms) — 5 秒
+CLICK_THRESHOLD = 3        # 点击判定阈值 (px) — 移动小于此值视为单击
 DIM_OPACITY = 0.5          # 变暗时的透明度
 
 
@@ -109,8 +108,6 @@ class CapsuleWindow(QMainWindow):
 
         # ── 状态 ──────────────────────────────────────────────────
         self.auto_hidden = True          # 初始为变暗状态
-        self._hover_expanded = False     # 是否已滑出
-        self._leave_timer: QTimer | None = None  # 离开防抖
         self._drag_pos: QPoint | None = None
         self._press_pos: QPoint | None = None
         self._side_panel = None          # SidePanel 引用（可选）
@@ -135,7 +132,7 @@ class CapsuleWindow(QMainWindow):
         self.setWindowFlags(
             Qt.FramelessWindowHint
             | Qt.WindowStaysOnTopHint
-            | Qt.Window
+            | Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setFixedSize(CAPSULE_SIZE, CAPSULE_SIZE)
@@ -145,31 +142,35 @@ class CapsuleWindow(QMainWindow):
     # ═══════════════════════════════════════════════════════════════
 
     def paintEvent(self, event) -> None:
-        """绘制绿色渐变圆形 + 白色 AI，居中在正方形控件内。"""
+        """绘制绿色渐变圆形胶囊 + 白色 "AI" 文字。"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.setOpacity(0.5 if self.auto_hidden else 1.0)
 
-        w, h = self.width(), self.height()
-        # 圆形居中
-        cx = (w - CIRCLE_SIZE) // 2
-        cy = (h - CIRCLE_SIZE) // 2
-        rect = QRectF(cx, cy, CIRCLE_SIZE, CIRCLE_SIZE)
+        opacity = 0.5 if self.auto_hidden else 1.0
+        painter.setOpacity(opacity)
 
-        gradient = QLinearGradient(0, cy, 0, cy + CIRCLE_SIZE)
+        w = self.width()
+        h = self.height()
+        margin = 1
+        rect = QRectF(margin, margin, w - 2 * margin, h - 2 * margin)
+
+        # 绿色渐变（#3fb950 → #238636）
+        gradient = QLinearGradient(0, 0, 0, h)
         gradient.setColorAt(0.0, QColor("#3fb950"))
         gradient.setColorAt(1.0, QColor("#238636"))
         painter.setPen(Qt.NoPen)
         painter.setBrush(QBrush(gradient))
         painter.drawEllipse(rect)
 
+        # 白色 "AI" 文字（带轻微阴影）
         shadow = QColor(0, 0, 0, 60)
         painter.setPen(QPen(shadow))
         font = QFont("Microsoft YaHei", 15, QFont.Bold)
         painter.setFont(font)
-        painter.drawText(rect.adjusted(1, 1, 0, 0), Qt.AlignCenter, "AI")
+        painter.drawText(QRectF(1, 1, w, h), Qt.AlignCenter, "AI")
         painter.setPen(QPen(QColor("#FFFFFF")))
-        painter.drawText(rect, Qt.AlignCenter, "AI")
+        painter.drawText(QRectF(0, 0, w, h), Qt.AlignCenter, "AI")
+
         painter.end()
 
     # ═══════════════════════════════════════════════════════════════
@@ -216,40 +217,28 @@ class CapsuleWindow(QMainWindow):
         super().mouseReleaseEvent(event)
 
     def enterEvent(self, event: QEnterEvent) -> None:
-        """鼠标进入 → 取消缩回 + 滑出 + 变亮。"""
-        if self._leave_timer is not None:
-            self._leave_timer.stop()
-            self._leave_timer = None
+        """鼠标进入 → 滑出完全显示 + 变亮 + 重置计时器。"""
         if self.auto_hidden:
             self.auto_hidden = False
             self.update()
-        if not self._hover_expanded:
-            self._animate_slide_out()
-            self._hover_expanded = True
+        self._animate_slide_out()
         self._reset_idle()
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        """鼠标离开 → 延迟缩回。大正方形保证鼠标不容易意外离开。"""
-        if self._leave_timer is None:
-            self._leave_timer = QTimer(self)
-            self._leave_timer.setSingleShot(True)
-            self._leave_timer.timeout.connect(self._on_leave_debounced)
-        self._leave_timer.start(180)
+        """鼠标离开 → 滑回半隐藏。"""
+        self.snap_to_half_hidden()
         super().leaveEvent(event)
 
-    def _on_leave_debounced(self) -> None:
-        self._hover_expanded = False
-        self._leave_timer = None
-        self.snap_to_half_hidden()
-
     def _animate_slide_out(self) -> None:
-        """滑出动画：胶囊完全显示，靠屏幕左边缘。"""
+        """滑出动画：胶囊从半隐藏位置滑到完全可见。"""
         screen = QApplication.screenAt(self.pos()) or QApplication.primaryScreen()
         if screen is None:
             return
         geom = screen.availableGeometry()
-        target = QPoint(geom.left() + 1, self.pos().y())
+        target_x = geom.left()  # fully visible at screen edge
+        target_y = self.pos().y()
+        target = QPoint(target_x, target_y)
 
         anim = QPropertyAnimation(self, b"pos", self)
         anim.setDuration(180)
@@ -275,7 +264,6 @@ class CapsuleWindow(QMainWindow):
             return
 
         geom = screen.availableGeometry()
-        # Half hidden: show right half of widget (32px visible out of 64px)
         target_x = geom.left() - CAPSULE_SIZE // 2
         target_y = geom.center().y() - CAPSULE_SIZE // 2
         target = QPoint(target_x, target_y)
