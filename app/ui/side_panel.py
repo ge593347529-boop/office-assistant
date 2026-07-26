@@ -134,14 +134,13 @@ class _MessageBubble(QFrame):
                 bg=_CLR_USER_BUBBLE,
                 border=_CLR_USER_BUBBLE_BORDER,
                 radius="14px 14px 3px 14px",
+                padding="8px 12px",
             ))
             align = Qt.AlignRight
             self._label.setStyleSheet(
                 "color: #1a1a2e; font-size: 13px; background: transparent; border: none;"
             )
-            self._time_label.setStyleSheet(
-                "color: rgba(0,0,0,0.3); font-size: 9px; background: transparent;"
-            )
+            self._time_label.setVisible(False)  # no timestamp on user bubbles
         elif self._role == "assistant":
             self.setStyleSheet(self._bubble_qss(
                 bg=_CLR_ASSISTANT_BUBBLE,
@@ -587,18 +586,18 @@ class SidePanel(QMainWindow):
             }}
 
             QScrollBar:vertical {{
-                background: rgba(255,255,255,0.02);
-                width: 5px;
+                background: #f0f0f0;
+                width: 8px;
                 margin: 4px 2px;
-                border-radius: 3px;
+                border-radius: 4px;
             }}
             QScrollBar::handle:vertical {{
-                background: rgba(255,255,255,0.15);
-                border-radius: 3px;
+                background: #c0c0c0;
+                border-radius: 4px;
                 min-height: 30px;
             }}
             QScrollBar::handle:vertical:hover {{
-                background: rgba(255,255,255,0.25);
+                background: #999999;
             }}
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical {{
@@ -800,28 +799,44 @@ class SidePanel(QMainWindow):
     def _add_bubble(self, role: str, content: str) -> None:
         """Add a message: user=bubble+right, AI=avatar+typewriter, system=centered."""
         if role == "assistant":
-            # AI: avatar + plain text, no bubble frame
+            # AI: avatar + name on top, reply text below, wider
             row = QWidget(self._msg_container)
             row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(8, 4, 40, 4)
-            row_layout.setSpacing(8)
+            row_layout.setContentsMargins(8, 6, 60, 6)
+            row_layout.setSpacing(10)
 
             avatar = QLabel("🤖")
-            avatar.setFixedSize(32, 32)
+            avatar.setFixedSize(36, 36)
             avatar.setAlignment(Qt.AlignCenter)
             avatar.setStyleSheet(
-                "background: #e8e8e8; border-radius: 16px; font-size: 16px;"
+                "background: #e8e8e8; border-radius: 18px; font-size: 18px;"
             )
             avatar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             row_layout.addWidget(avatar, alignment=Qt.AlignTop)
 
+            # Name + text column
+            col = QWidget()
+            col_layout = QVBoxLayout(col)
+            col_layout.setContentsMargins(0, 0, 0, 0)
+            col_layout.setSpacing(4)
+
+            name_label = QLabel("AI 办公助手")
+            name_label.setStyleSheet(
+                "color: #666; font-size: 12px; font-weight: 600; background: transparent; border: none;"
+            )
+
             text_label = QLabel(content)
             text_label.setWordWrap(True)
             text_label.setTextFormat(Qt.PlainText)
-            text_label.setStyleSheet("color: #1a1a2e; font-size: 13px; background: transparent; border: none;")
-            text_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
-            text_label.setMaximumWidth(int(self.width() * 0.65))
-            row_layout.addWidget(text_label)
+            text_label.setStyleSheet(
+                "color: #1a1a2e; font-size: 13px; background: transparent; border: none;"
+            )
+            text_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            text_label.setMaximumWidth(int(self.width() * 0.75))
+
+            col_layout.addWidget(name_label)
+            col_layout.addWidget(text_label)
+            row_layout.addWidget(col, stretch=1)
             row_layout.addStretch()
 
             # Fade-in
@@ -850,7 +865,7 @@ class SidePanel(QMainWindow):
         elif role == "user":
             # User: bubble, right-aligned, fade-in only (no slide)
             bubble = _MessageBubble(role, content, parent=self._msg_container)
-            bubble.setMaximumWidth(int(self.width() * 0.8))
+            bubble.setMaximumWidth(int(self.width() * 0.55))
             bubble.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
 
             wrapper = QWidget(self._msg_container)

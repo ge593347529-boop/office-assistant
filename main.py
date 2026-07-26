@@ -7,8 +7,10 @@ from PySide6.QtCore import QLockFile, QTimer
 
 def main():
     # Single instance check
-    lock = QLockFile("ai_office_assistant.lock")
-    lock.setStaleLockTime(0)
+    from pathlib import Path
+    lock_path = str(Path(__file__).parent / "ai_office_assistant.lock")
+    lock = QLockFile(lock_path)
+    lock.setStaleLockTime(30000)  # 30s stale → auto-clean
     if not lock.tryLock(100):
         print("应用已在运行中")
         sys.exit(0)
