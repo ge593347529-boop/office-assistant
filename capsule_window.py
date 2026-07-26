@@ -108,6 +108,8 @@ class CapsuleWindow(QMainWindow):
 
         # ── 状态 ──────────────────────────────────────────────────
         self.auto_hidden = True          # 初始为变暗状态
+        self._hover_expanded = False     # 是否已滑出
+        self._leave_timer: QTimer | None = None  # 离开防抖
         self._drag_pos: QPoint | None = None
         self._press_pos: QPoint | None = None
         self._side_panel = None          # SidePanel 引用（可选）
@@ -217,18 +219,34 @@ class CapsuleWindow(QMainWindow):
         super().mouseReleaseEvent(event)
 
     def enterEvent(self, event: QEnterEvent) -> None:
-        """鼠标进入 → 滑出完全显示 + 变亮 + 重置计时器。"""
+        """鼠标进入 → 取消离开防抖 + 滑出 + 变亮 + 重置计时器。"""
+        # Cancel pending retreat
+        if self._leave_timer is not None:
+            self._leave_timer.stop()
+            self._leave_timer = None
         if self.auto_hidden:
             self.auto_hidden = False
             self.update()
-        self._animate_slide_out()
+        if not self._hover_expanded:
+            self._animate_slide_out()
+            self._hover_expanded = True
         self._reset_idle()
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        """鼠标离开 → 滑回半隐藏。"""
-        self.snap_to_half_hidden()
+        """鼠标离开 → 延迟 150ms 后缩回（防止边缘抖动）。"""
+        if self._leave_timer is None:
+            self._leave_timer = QTimer(self)
+            self._leave_timer.setSingleShot(True)
+            self._leave_timer.timeout.connect(self._on_leave_debounced)
+        self._leave_timer.start(150)
         super().leaveEvent(event)
+
+    def _on_leave_debounced(self) -> None:
+        """防抖触发：真正缩回半隐藏。"""
+        self._hover_expanded = False
+        self._leave_timer = None
+        self.snap_to_half_hidden()
 
     def _animate_slide_out(self) -> None:
         """滑出动画：胶囊从半隐藏位置滑到完全可见。"""
