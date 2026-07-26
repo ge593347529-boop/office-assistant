@@ -48,11 +48,10 @@ logger = logging.getLogger(__name__)
 # 常量
 # ---------------------------------------------------------------------------
 
-CAPSULE_SIZE = 56          # 控件尺寸 (px)，含透明边距
+CAPSULE_SIZE = 64          # 控件尺寸 (px)，正方形
 CIRCLE_SIZE = 48           # 视觉圆形直径 (px)
-CIRCLE_MARGIN = 4          # 圆形左侧透明边距 (px)
 SNAP_DURATION = 220        # 吸附动画时长 (ms)
-IDLE_TIMEOUT = 5_000       # 空闲超时 (ms) — 5 秒
+IDLE_TIMEOUT = 5_000       # 空闲超时 (ms)
 CLICK_THRESHOLD = 3        # 点击判定阈值 (px)
 DIM_OPACITY = 0.5          # 变暗时的透明度
 
@@ -111,8 +110,7 @@ class CapsuleWindow(QMainWindow):
         # ── 状态 ──────────────────────────────────────────────────
         self.auto_hidden = True          # 初始为变暗状态
         self._hover_expanded = False     # 是否已滑出
-        self._hover_watch_timer: QTimer | None = None  # 悬停检测
-        self._hover_gone_count = 0       # 连续不在胶囊上的次数
+        self._leave_timer: QTimer | None = None  # 离开防抖
         self._drag_pos: QPoint | None = None
         self._press_pos: QPoint | None = None
         self._side_panel = None          # SidePanel 引用（可选）
@@ -147,20 +145,17 @@ class CapsuleWindow(QMainWindow):
     # ═══════════════════════════════════════════════════════════════
 
     def paintEvent(self, event) -> None:
-        """绘制绿色渐变圆形胶囊 + 白色 AI 文字。圆形靠右，左侧透明边距扩展 hitbox。"""
+        """绘制绿色渐变圆形 + 白色 AI，居中在正方形控件内。"""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
-
-        opacity = 0.5 if self.auto_hidden else 1.0
-        painter.setOpacity(opacity)
+        painter.setOpacity(0.5 if self.auto_hidden else 1.0)
 
         w, h = self.width(), self.height()
-        # 圆形靠右绘制，左边留 CIRCLE_MARGIN 透明间距
-        cx = w - CIRCLE_SIZE - CIRCLE_MARGIN
+        # 圆形居中
+        cx = (w - CIRCLE_SIZE) // 2
         cy = (h - CIRCLE_SIZE) // 2
         rect = QRectF(cx, cy, CIRCLE_SIZE, CIRCLE_SIZE)
 
-        # 绿色渐变
         gradient = QLinearGradient(0, cy, 0, cy + CIRCLE_SIZE)
         gradient.setColorAt(0.0, QColor("#3fb950"))
         gradient.setColorAt(1.0, QColor("#238636"))
@@ -168,7 +163,6 @@ class CapsuleWindow(QMainWindow):
         painter.setBrush(QBrush(gradient))
         painter.drawEllipse(rect)
 
-        # 白色 AI 文字
         shadow = QColor(0, 0, 0, 60)
         painter.setPen(QPen(shadow))
         font = QFont("Microsoft YaHei", 15, QFont.Bold)
@@ -176,7 +170,6 @@ class CapsuleWindow(QMainWindow):
         painter.drawText(rect.adjusted(1, 1, 0, 0), Qt.AlignCenter, "AI")
         painter.setPen(QPen(QColor("#FFFFFF")))
         painter.drawText(rect, Qt.AlignCenter, "AI")
-
         painter.end()
 
     # ═══════════════════════════════════════════════════════════════
@@ -223,55 +216,40 @@ class CapsuleWindow(QMainWindow):
         super().mouseReleaseEvent(event)
 
     def enterEvent(self, event: QEnterEvent) -> None:
-        """鼠标进入 → 变亮 + 重置计时器 + 启动悬停检测。"""
+        """鼠标进入 → 取消缩回 + 滑出 + 变亮。"""
+        if self._leave_timer is not None:
+            self._leave_timer.stop()
+            self._leave_timer = None
         if self.auto_hidden:
             self.auto_hidden = False
             self.update()
         if not self._hover_expanded:
             self._animate_slide_out()
             self._hover_expanded = True
-            self._start_hover_watch()
         self._reset_idle()
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        """不处理——改用 _hover_watch 定时器轮询 underMouse()。"""
+        """鼠标离开 → 延迟缩回。大正方形保证鼠标不容易意外离开。"""
+        if self._leave_timer is None:
+            self._leave_timer = QTimer(self)
+            self._leave_timer.setSingleShot(True)
+            self._leave_timer.timeout.connect(self._on_leave_debounced)
+        self._leave_timer.start(180)
         super().leaveEvent(event)
 
-    def _start_hover_watch(self) -> None:
-        """启动悬停检测定时器：每 150ms 检测鼠标是否还在胶囊上。"""
-        if self._hover_watch_timer is None:
-            self._hover_watch_timer = QTimer(self)
-            self._hover_watch_timer.timeout.connect(self._check_hover)
-        self._hover_gone_count = 0
-        self._hover_watch_timer.start(150)
-
-    def _check_hover(self) -> None:
-        """检测鼠标是否已离开胶囊。"""
-        if self.underMouse():
-            self._hover_gone_count = 0
-        else:
-            self._hover_gone_count += 1
-            if self._hover_gone_count >= 2:  # 300ms 确认离开
-                self._hover_watch_timer.stop()
-                self._hover_expanded = False
-                self.snap_to_half_hidden()
+    def _on_leave_debounced(self) -> None:
+        self._hover_expanded = False
+        self._leave_timer = None
+        self.snap_to_half_hidden()
 
     def _animate_slide_out(self) -> None:
-        """滑出动画：胶囊滑到鼠标下方，保证鼠标在胶囊内。"""
-        from PySide6.QtGui import QCursor
+        """滑出动画：胶囊完全显示，靠屏幕左边缘。"""
         screen = QApplication.screenAt(self.pos()) or QApplication.primaryScreen()
         if screen is None:
             return
         geom = screen.availableGeometry()
-        mouse_x = QCursor.pos().x()
-        # Target: flush with screen edge, circle padding absorbs edge gap
-        target_x = geom.left()
-        if mouse_x < target_x + 8:
-            target_x = mouse_x - 4  # transparent padding keeps mouse inside
-        target_x = max(geom.left(), target_x)
-        target_y = self.pos().y()
-        target = QPoint(target_x, target_y)
+        target = QPoint(geom.left(), self.pos().y())
 
         anim = QPropertyAnimation(self, b"pos", self)
         anim.setDuration(180)
@@ -297,8 +275,8 @@ class CapsuleWindow(QMainWindow):
             return
 
         geom = screen.availableGeometry()
-        # Half hidden: show right half of the circle only
-        target_x = geom.left() - CIRCLE_MARGIN - CIRCLE_SIZE // 2
+        # Half hidden: show right half of widget (32px visible out of 64px)
+        target_x = geom.left() - CAPSULE_SIZE // 2
         target_y = geom.center().y() - CAPSULE_SIZE // 2
         target = QPoint(target_x, target_y)
 
